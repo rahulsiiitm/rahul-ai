@@ -1,0 +1,23 @@
+# Security: never commit personal data or generated outputs
+data/jarvis.db
+outputs/
+
+# Virtual environment
+.venv/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Env overrides
+.env

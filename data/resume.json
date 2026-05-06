@@ -1,0 +1,56 @@
+{
+  "name": "Rahul Sharma",
+  "contact": {
+    "email": "your.email@example.com",
+    "phone": "+91 XXXXX XXXXX",
+    "linkedin": "https://linkedin.com/in/yourprofile",
+    "github": "https://github.com/yourusername",
+    "portfolio": ""
+  },
+  "summary": "Final-year B.Tech student specializing in AI/ML systems with hands-on experience building local LLM pipelines, multimodal RAG frameworks, and production-grade Python systems. Passionate about privacy-first AI and edge computing.",
+  "skills": [
+    "Python", "PyTorch", "TensorFlow", "Machine Learning",
+    "LLMs", "Ollama", "LangChain", "FastAPI",
+    "SQLite", "Docker", "Git", "Linux",
+    "Computer Vision", "NLP", "RAG Systems",
+    "REST APIs", "Data Structures", "Algorithms"
+  ],
+  "experience": [
+    {
+      "role": "AI/ML Intern",
+      "company": "Example Company",
+      "duration": "Jun 2024 – Aug 2024",
+      "bullets": [
+        "Built a real-time video analytics pipeline processing 30 FPS on edge hardware",
+        "Reduced model inference latency by 40% using quantization and batching techniques",
+        "Deployed FastAPI microservice serving ML predictions to 3 downstream teams"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "VidChain — Forensic Video Intelligence Suite",
+      "description": "Multimodal RAG framework for forensic video analysis using local LLMs, GraphRAG, and multi-sensor fusion. Built edge-optimized B.A.B.U.R.A.O. engine for consumer GPU inference.",
+      "tech": ["Python", "Ollama", "Mistral", "LangChain", "SQLite", "FastAPI", "OpenCV"],
+      "link": "https://github.com/yourusername/vidchain"
+    },
+    {
+      "name": "Jarvis — Private AI Job Assistant",
+      "description": "Fully local AI assistant for job applications. Generates tailored emails, customizes resume content, and scores job relevance — all offline using Ollama + Mistral.",
+      "tech": ["Python", "Ollama", "Mistral", "SQLite", "Typer", "Rich"],
+      "link": "https://github.com/yourusername/jarvis"
+    }
+  ],
+  "education": [
+    {
+      "degree": "B.Tech in Computer Science & Engineering (AI/ML Specialization)",
+      "institution": "Your University Name",
+      "year": "2025",
+      "cgpa": "8.X/10"
+    }
+  ],
+  "certifications": [
+    "Deep Learning Specialization — Coursera (Andrew Ng)",
+    "TensorFlow Developer Certificate — Google"
+  ]
+}
