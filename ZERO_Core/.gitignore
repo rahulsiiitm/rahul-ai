@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# ZERO Runtime
+db/zero.db
+credentials/gmail_token.json
+
+# NEVER commit these — OAuth secrets
+credentials/gmail_credentials.json
+
+# Model weights (large binary files)
+voices/*.onnx
+voices/*.onnx.json
+
+# IDE
+.vscode/
+.idea/

@@ -1,1 +1,25 @@
+# ── Core ──────────────────────────────────────────────────────────────────────
 ollama>=0.2.0
+
+# ── TUI ───────────────────────────────────────────────────────────────────────
+textual>=0.60.0
+
+# ── Voice Input (STT + Wake Word) ─────────────────────────────────────────────
+faster-whisper
+sounddevice
+numpy
+openwakeword
+
+# ── Voice Output (Piper is a binary — installed via AUR or pip) ───────────────
+# piper-tts  # install manually: yay -S piper-tts
+
+# ── Gmail API ─────────────────────────────────────────────────────────────────
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+
+# ── System Stats ──────────────────────────────────────────────────────────────
+psutil
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dateutil
