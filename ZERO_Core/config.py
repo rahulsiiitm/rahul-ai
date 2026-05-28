@@ -5,6 +5,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ── Ollama / Brain ─────────────────────────────────────────────────────────────
 OLLAMA_MODEL = "zero"
+# RTX 3050 Laptop = 4 GB VRAM. Mistral 7B needs ~4.1 GB for full GPU offload.
+# 20 layers on GPU + remainder on CPU RAM gives stable hybrid inference.
+# Raise carefully — OOM causes a silent CUDA crash with no response.
+OLLAMA_NUM_GPU = 20
 
 # ── Piper TTS ──────────────────────────────────────────────────────────────────
 PIPER_MODEL_PATH = os.path.join(BASE_DIR, "voices", "en_US-ryan-high.onnx")
@@ -36,4 +40,3 @@ GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.modify",
 ]
-

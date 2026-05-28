@@ -18,3 +18,7 @@ voices/*.onnx.json
 # IDE
 .vscode/
 .idea/
+
+ZERO.modelfile
+
+.gitignore

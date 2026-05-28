@@ -2,31 +2,32 @@
 ZERO CORE — Entry Point
 
 Boot sequence:
-  1. Dispatcher  (tools)
-  2. Brain       (Ollama LLM)
-  3. Listener    (wake word + STT)
-  4. TUI         (Textual 3-panel UI)
+  1. Dispatcher  (tool router)
+  2. Brain       (Ollama LLM — streaming)
+  3. TUI         (Textual 3-panel UI)
+
+Voice / STT disabled — will be re-enabled after core is stable.
 """
 
 import sys
 
 from engine.brain      import ZeroBrain
-from engine.voice      import ZeroVoice
 from engine.dispatcher import ZeroDispatcher
 from tools.job_tracker import JobTracker
 
 
-def boot_terminal_fallback(brain: ZeroBrain, voice: ZeroVoice):
+def boot_terminal_fallback(brain: ZeroBrain):
     """Minimal terminal loop — used if Textual is not installed."""
     print("\n══════════════════════════════════════════════════")
     print("      ZERO CORE RUNTIME ENGINE INITIALIZED        ")
     print("══════════════════════════════════════════════════")
-    print("Mode: Terminal Fallback  |  Stream: GPU → stdout\n")
+    print("Mode: Terminal  |  Stream: GPU → stdout\n")
 
     while True:
         try:
             user_input = input("Rahul ──▶ ")
             if user_input.lower() in ("exit", "quit", "shutdown"):
+                print("ZERO: Shutting down.")
                 break
             if not user_input.strip():
                 continue
@@ -37,9 +38,7 @@ def boot_terminal_fallback(brain: ZeroBrain, voice: ZeroVoice):
             for token in brain.generate_streaming_response(user_input):
                 sys.stdout.write(token)
                 sys.stdout.flush()
-                voice.stream_token(token)
 
-            voice.end_of_turn()
             print()
 
         except (KeyboardInterrupt, EOFError):
@@ -54,44 +53,20 @@ def main():
     # ── 2. Brain ───────────────────────────────────────────────────────────────
     brain = ZeroBrain(dispatcher=dispatcher)
 
-    # ── 3. Voice output (Piper TTS) ────────────────────────────────────────────
-    voice = ZeroVoice()
-
-    # ── 4. Listener (wake word + Whisper STT) ──────────────────────────────────
-    try:
-        from engine.listener import ZeroListener
-        listener = ZeroListener()
-    except ImportError:
-        print("[ZERO] Listener deps not installed — voice input disabled.")
-        listener = None
-
-    # ── 5. TUI ─────────────────────────────────────────────────────────────────
+    # ── 3. TUI ─────────────────────────────────────────────────────────────────
     try:
         from ui.app import ZeroApp
         jobs_db = JobTracker()
         app = ZeroApp(
             brain=brain,
             dispatcher=dispatcher,
-            listener=listener,
             jobs=jobs_db,
         )
-
-        # Pipe TTS into every brain response via TUI token callback
-        original_gen = brain.generate_streaming_response
-
-        def gen_with_voice(prompt: str):
-            for token in original_gen(prompt):
-                voice.stream_token(token)
-                yield token
-            voice.end_of_turn()
-
-        brain.generate_streaming_response = gen_with_voice
-
         app.run()
 
-    except ImportError:
-        print("[ZERO] Textual not installed — falling back to terminal mode.")
-        boot_terminal_fallback(brain, voice)
+    except ImportError as e:
+        print(f"[ZERO] Textual not installed ({e}) — falling back to terminal mode.")
+        boot_terminal_fallback(brain)
 
 
 if __name__ == "__main__":

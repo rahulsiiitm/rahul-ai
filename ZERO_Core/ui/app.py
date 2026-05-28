@@ -1,5 +1,5 @@
 """
-ZERO TUI — Three-panel Jarvis-style interface built with Textual.
+ZERO TUI — Three-panel Jarvis-style interface built with Textual 8.x.
 
 Layout
 ------
@@ -9,12 +9,13 @@ Layout
 │  INBOX       │   ZERO CHAT      │ JOB TRACK  │
 │  (Gmail)     │   (streaming)    │ (SQLite)   │
 └──────────────┴──────────────────┴────────────┘
-│  ● Monitoring for 'Hey ZERO'...              │
+│  ● Status                                    │
 └─────────────────────────────────────────────┘
+
+Voice / STT disabled — re-enabled after core is stable.
 """
 
 import threading
-from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -22,7 +23,6 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import (
     Header, Footer, Static, RichLog, DataTable, Label, Input
 )
-from textual.reactive import reactive
 
 
 # ── Individual Panel Widgets ───────────────────────────────────────────────────
@@ -35,7 +35,6 @@ class InboxPanel(Static):
         width: 1fr;
         height: 100%;
         border: solid #00d4ff;
-        border-title-color: #00d4ff;
         padding: 0 1;
         overflow-y: auto;
     }
@@ -45,12 +44,9 @@ class InboxPanel(Static):
         yield Label("  INBOX", id="inbox-title")
         yield RichLog(id="inbox-log", highlight=True, markup=True, wrap=True)
 
-    def add_entry(self, sender: str, subject: str, email_id: str = ""):
+    def add_entry(self, sender: str, subject: str):
         log = self.query_one("#inbox-log", RichLog)
-        log.write(
-            f"[bold cyan]▸[/] [green]{sender[:22]}[/]\n"
-            f"  [dim]{subject[:34]}[/]\n"
-        )
+        log.write(f"[bold cyan]▸[/] [green]{sender[:22]}[/]\n  [dim]{subject[:34]}[/]")
 
     def clear(self):
         self.query_one("#inbox-log", RichLog).clear()
@@ -64,7 +60,6 @@ class ChatPanel(Static):
         width: 2fr;
         height: 100%;
         border: solid #7b61ff;
-        border-title-color: #7b61ff;
         padding: 0 1;
     }
     """
@@ -73,19 +68,14 @@ class ChatPanel(Static):
         yield Label("  ZERO CHAT", id="chat-title")
         yield RichLog(id="chat-log", highlight=True, markup=True, wrap=True)
 
-    def append_token(self, token: str):
-        log = self.query_one("#chat-log", RichLog)
-        log.write(token, end="")
-
     def write_user(self, text: str):
-        log = self.query_one("#chat-log", RichLog)
-        log.write(f"\n[bold cyan]Rahul ──▶[/]  {text}")
+        self.query_one("#chat-log", RichLog).write(f"\n[bold cyan]Rahul ──▶[/]  {text}")
 
-    def write_zero_start(self):
-        log = self.query_one("#chat-log", RichLog)
-        log.write("\n[bold #7b61ff]ZERO  ──▶[/]  ", end="")
+    def write_zero(self, text: str):
+        """Write a complete ZERO response (called once per turn)."""
+        self.query_one("#chat-log", RichLog).write(f"[bold #7b61ff]ZERO  ──▶[/]  {text}\n")
 
-    def write_line(self, text: str):
+    def write_line(self, text: str = ""):
         self.query_one("#chat-log", RichLog).write(text)
 
 
@@ -97,7 +87,6 @@ class JobPanel(Static):
         width: 1fr;
         height: 100%;
         border: solid #ff6b6b;
-        border-title-color: #ff6b6b;
         padding: 0 1;
         overflow-y: auto;
     }
@@ -191,13 +180,11 @@ class ZeroApp(App):
 
     TITLE = "ZERO CORE — AI Assistant"
 
-    def __init__(self, brain=None, dispatcher=None, listener=None, jobs=None):
+    def __init__(self, brain=None, dispatcher=None, jobs=None):
         super().__init__()
         self.brain      = brain
         self.dispatcher = dispatcher
-        self.listener   = listener
         self.jobs_db    = jobs
-        self._status_text = reactive("● Initializing…")
 
     # ── Layout ─────────────────────────────────────────────────────────────────
 
@@ -208,23 +195,17 @@ class ZeroApp(App):
                 yield InboxPanel(id="panel-inbox")
                 yield ChatPanel(id="panel-chat")
                 yield JobPanel(id="panel-jobs")
-            yield Static("● Initializing…", id="status-bar")
+            yield Static("● Ready", id="status-bar")
             with Horizontal(id="input-row"):
                 yield Input(
-                    placeholder="  Type a command or speak 'Hey ZERO'…",
+                    placeholder="  Type a command for ZERO…",
                     id="text-input",
                 )
         yield Footer()
 
     def on_mount(self):
-        self.set_status("● Monitoring for 'Hey ZERO'…")
+        self.set_status("● ZERO online — awaiting input.")
         self._refresh_jobs()
-
-        if self.listener:
-            self.listener.on_wake          = lambda msg: self.call_from_thread(self.set_status, f"🎙 {msg}")
-            self.listener.on_transcription = lambda t:   self.call_from_thread(self._handle_input, t)
-            self.listener.on_status        = lambda s:   self.call_from_thread(self.set_status, s)
-            self.listener.start()
 
     # ── Input handling ─────────────────────────────────────────────────────────
 
@@ -232,20 +213,36 @@ class ZeroApp(App):
         text = event.value.strip()
         if text:
             event.input.value = ""
-            threading.Thread(target=self._handle_input, args=(text,), daemon=True).start()
+            threading.Thread(
+                target=self._handle_input, args=(text,), daemon=True
+            ).start()
 
     def _handle_input(self, text: str):
-        chat = self.query_one("#panel-chat", ChatPanel)
-        self.call_from_thread(chat.write_user, text)
-        self.call_from_thread(chat.write_zero_start)
-        self.call_from_thread(self.set_status, "● Thinking…")
+        """Run in background thread — collect ZERO's full response then display."""
+        try:
+            chat = self.query_one("#panel-chat", ChatPanel)
+            self.call_from_thread(chat.write_user, text)
+            self.call_from_thread(self.set_status, "● Thinking…")
 
-        for token in self.brain.generate_streaming_response(text):
-            self.call_from_thread(chat.append_token, token)
+            # Collect all tokens into a single string
+            response = ""
+            for token in self.brain.generate_streaming_response(text):
+                response += token
 
-        self.call_from_thread(chat.write_line, "")
-        self.call_from_thread(self.set_status, "● Monitoring for 'Hey ZERO'…")
-        self.call_from_thread(self._refresh_jobs)
+            # Write the complete response to the chat log in one call
+            self.call_from_thread(chat.write_zero, response.strip())
+            self.call_from_thread(self.set_status, "● Ready")
+            self.call_from_thread(self._refresh_jobs)
+
+        except Exception as e:
+            import traceback
+            err = traceback.format_exc()
+            try:
+                chat = self.query_one("#panel-chat", ChatPanel)
+                self.call_from_thread(chat.write_line, f"[red][Brain Error] {e}[/]")
+                self.call_from_thread(self.set_status, f"● Error: {e}")
+            except Exception:
+                pass
 
     # ── Refresh helpers ────────────────────────────────────────────────────────
 
@@ -269,7 +266,7 @@ class ZeroApp(App):
         panel = self.query_one("#panel-inbox", InboxPanel)
         panel.clear()
         for line in raw_result.strip().split("\n"):
-            parts = line.split("|")
+            parts   = line.split("|")
             sender  = parts[1].replace("From:", "").strip() if len(parts) > 1 else "?"
             subject = parts[2].replace("Subject:", "").strip() if len(parts) > 2 else "?"
             panel.add_entry(sender, subject)

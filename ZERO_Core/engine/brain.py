@@ -1,15 +1,26 @@
 """
 ZeroBrain — Ollama chat engine with tool-call interception.
 
-Normal flow  : stream tokens directly to caller (low latency).
-Tool flow    : buffer first response → detect [TOOL:...] tag → dispatch → stream narration.
+Normal flow  : buffer → no tool tag → yield tokens.
+Tool flow    : buffer → detect [TOOL:...] tag → dispatch → inject [RESULT:]
+               → single second Ollama call for narration → yield narration tokens.
+
+Note: Two-call tool flow is necessary because Ollama needs a fresh message
+      with the result injected. We avoid OOM by keeping num_gpu conservative
+      (set in config.py — tuned for RTX 3050 Laptop 4 GB VRAM).
 """
 
 import re
 import ollama
-from config import OLLAMA_MODEL
+from config import OLLAMA_MODEL, OLLAMA_NUM_GPU
 
 _TOOL_RE = re.compile(r'\[TOOL:[^\]]+\]')
+
+_OLLAMA_OPTIONS = {
+    "num_gpu": OLLAMA_NUM_GPU,
+    "num_ctx": 2048,          # reduced from 4096 — saves ~400 MB VRAM
+    "num_predict": 256,       # cap response length — ZERO should be brief
+}
 
 
 class ZeroBrain:
@@ -17,7 +28,7 @@ class ZeroBrain:
     def __init__(self, dispatcher=None):
         self.model      = OLLAMA_MODEL
         self.history    = []
-        self.dispatcher = dispatcher          # injected after construction
+        self.dispatcher = dispatcher
 
     def set_dispatcher(self, dispatcher):
         self.dispatcher = dispatcher
@@ -27,71 +38,72 @@ class ZeroBrain:
     def generate_streaming_response(self, prompt: str):
         """
         Yield tokens for the given prompt.
-        If ZERO's response contains a [TOOL:...] tag:
-          1. Run the tool (silent — no tokens yielded yet)
-          2. Feed result back as a [RESULT:] user message
-          3. Stream ZERO's narration of the result
+
+        If ZERO's first response is a [TOOL:...] tag:
+          1. Dispatch tool silently
+          2. Inject [RESULT:] and call Ollama again for narration
+          3. Stream narration tokens
+        Otherwise: stream buffered tokens directly.
         """
         self.history.append({"role": "user", "content": prompt})
 
-        # ── Step 1: buffer full response to detect tool calls ──────────────────
-        try:
-            stream = ollama.chat(
-                model=self.model,
-                messages=self.history,
-                stream=True,
-                options={"num_gpu": 99, "num_ctx": 4096},
-            )
-        except Exception as e:
-            yield f"\n[Brain] Connection error: {e}"
+        # ── Step 1: get ZERO's first response ─────────────────────────────────
+        full_reply, error = self._collect(self.history)
+
+        if error:
+            yield error
             return
 
-        full_reply = ""
-        buffered   = []
-
-        for chunk in stream:
-            token = chunk["message"]["content"]
-            full_reply += token
-            buffered.append(token)
-
-        # ── Step 2: did ZERO call a tool? ──────────────────────────────────────
+        # ── Step 2: tool detection ─────────────────────────────────────────────
         tool_match = _TOOL_RE.search(full_reply)
 
         if tool_match and self.dispatcher:
             tag = tool_match.group(0)
-
-            # Save ZERO's decision to history
             self.history.append({"role": "assistant", "content": tag})
 
-            # Run tool — get plain-text result
-            result = self.dispatcher.dispatch(tag)
+            # Run the tool
+            try:
+                result = self.dispatcher.dispatch(tag)
+            except Exception as e:
+                result = f"[Tool Error] {e}"
 
-            # Feed result back and stream narration
-            self.history.append({"role": "user", "content": f"[RESULT:] {result}"})
-            yield from self._stream_narration()
+            # Inject result and get narration
+            narration_messages = self.history + [
+                {"role": "user", "content": f"[RESULT:] {result}"}
+            ]
+            narration, error2 = self._collect(narration_messages)
+            if error2:
+                yield error2
+                return
+
+            # Save both sides to history cleanly
+            self.history.append({"role": "user",      "content": f"[RESULT:] {result}"})
+            self.history.append({"role": "assistant",  "content": narration})
+
+            # Yield narration token-by-token (simulate streaming for TUI)
+            for char in narration:
+                yield char
 
         else:
-            # No tool — yield the buffered tokens and save history
-            for token in buffered:
-                yield token
+            # No tool — yield buffered tokens and save
+            for char in full_reply:
+                yield char
             self.history.append({"role": "assistant", "content": full_reply})
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
-    def _stream_narration(self):
-        """Stream ZERO's natural-language narration of a tool result."""
+    def _collect(self, messages: list) -> tuple[str, str | None]:
+        """
+        Run a non-streaming Ollama call and return (full_text, error_or_None).
+        Non-streaming avoids the two-connection VRAM contention issue on 4 GB GPUs.
+        """
         try:
-            stream = ollama.chat(
+            response = ollama.chat(
                 model=self.model,
-                messages=self.history,
-                stream=True,
-                options={"num_gpu": 99, "num_ctx": 4096},
+                messages=messages,
+                stream=False,
+                options=_OLLAMA_OPTIONS,
             )
-            narration = ""
-            for chunk in stream:
-                token = chunk["message"]["content"]
-                narration += token
-                yield token
-            self.history.append({"role": "assistant", "content": narration})
+            return response.message.content, None
         except Exception as e:
-            yield f"\n[Brain] Narration error: {e}"
+            return "", f"\n[Brain] Error: {e}"
