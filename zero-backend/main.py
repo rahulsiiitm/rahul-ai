@@ -1,17 +1,19 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 import asyncio
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
-from core.tasks import keep_alive
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from api import chat, health
 from core.config import ALLOWED_ORIGINS
-from api import health, chat
+from core.tasks import keep_alive
 
 load_dotenv()
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Start the background task
     task = asyncio.create_task(keep_alive())
     yield

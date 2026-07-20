@@ -1,7 +1,9 @@
 import time
-from core.config import RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX
+from typing import Any, Dict
 
-rate_limit_map = {}
+from core.config import RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS
+
+rate_limit_map: Dict[str, Dict[str, Any]] = {}
 
 def is_rate_limited(ip: str) -> bool:
     now = int(time.time() * 1000)

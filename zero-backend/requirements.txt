@@ -5,3 +5,7 @@ google-genai
 openai
 pydantic
 httpx
+pytest
+pytest-asyncio
+ruff
+mypy

@@ -1,16 +1,20 @@
 import os
-from fastapi import APIRouter, Request, HTTPException
+from typing import AsyncGenerator
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from models.schemas import ChatRequest
+
 from core.security import is_rate_limited
+from models.schemas import ChatRequest
 from services.ai import gemini_generator, xai_generator
 
 router = APIRouter()
 
 @router.post("/chat")
-async def chat_endpoint(request: Request, body: ChatRequest):
+async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingResponse:
     # Rate Limiting
-    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or request.client.host
+    client_ip = request.client.host if request.client is not None else "127.0.0.1"
+    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or client_ip
     if is_rate_limited(ip):
         raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
     
@@ -25,7 +29,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
             except StopAsyncIteration:
                 first_chunk = ""
             
-            async def stream():
+            async def stream() -> AsyncGenerator[str, None]:
                 if first_chunk: yield first_chunk
                 async for chunk in generator:
                     yield chunk
@@ -49,7 +53,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
             except StopAsyncIteration:
                 first_chunk = ""
                 
-            async def stream():
+            async def stream() -> AsyncGenerator[str, None]:
                 if first_chunk: yield first_chunk
                 async for chunk in generator:
                     yield chunk
@@ -64,4 +68,15 @@ async def chat_endpoint(request: Request, body: ChatRequest):
             print(f"xAI failed: {e}")
             pass
             
-    raise HTTPException(status_code=500, detail="Failed to connect to AI providers.")
+    async def fallback_stream() -> AsyncGenerator[str, None]:
+        yield '🏎️ "Zero left the pit..."\n\nIf you are seeing this msg then probably my free api credits are gone please try again later hehehe'
+        
+    return StreamingResponse(
+        fallback_stream(),
+        media_type="text/plain",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )

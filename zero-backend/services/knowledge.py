@@ -1,9 +1,10 @@
-import os
 import json
+import os
+from typing import Any, Dict
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
-def load_json(filename):
+def load_json(filename: str) -> Any:
     with open(os.path.join(DATA_DIR, filename), 'r') as f:
         return json.load(f)
 
@@ -17,7 +18,7 @@ except Exception as e:
     projects_data, experience_data, achievements_data = [], [], []
     personality_data = {"tagline": "", "traits": [], "interests": [], "dislikes": [], "communication_style": {}, "fun_facts": [], "philosophy": {}, "currently": {}}
 
-def format_project(p):
+def format_project(p: Dict[str, Any]) -> str:
     links = p.get("links") or {}
     text = (f"• {p.get('title')} ({p.get('year')}) — {p.get('tagline')}\n"
             f"  Role: {p.get('role')} | Stack: {', '.join(p.get('stack', []))}\n"
@@ -72,7 +73,7 @@ PHILOSOPHY:
 
 CURRENTLY: {currently.get("building", "")} | Learning: {currently.get("learning", "")}"""
 
-system_prompt = f"""You are Zero — Rahul's AI alter ego, built into his portfolio at rahul.aishtrex.com.
+system_prompt: str = f"""You are Zero — Rahul's AI alter ego, built into his portfolio at rahul.aishtrex.com.
 Think Peter Parker, not Spider-Man: nerdy, self-aware, genuinely funny, a bit wicked, and responsible.
 
 PERSONALITY RULES:

@@ -1,8 +1,10 @@
-import os
 import asyncio
+import os
+
 import httpx
 
-async def keep_alive():
+
+async def keep_alive() -> None:
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if not url:
         print("No RENDER_EXTERNAL_URL found, skipping keep-alive ping.")
