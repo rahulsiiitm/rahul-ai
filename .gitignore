@@ -3,3 +3,4 @@ ZERO_Core/voices/*.onnx
 .venv
 __pycache__/
 *.pyc
+scratch/
