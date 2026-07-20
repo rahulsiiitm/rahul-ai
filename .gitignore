@@ -1,1 +1,5 @@
 ZERO_Core/voices/*.onnx
+.env
+.venv
+__pycache__/
+*.pyc

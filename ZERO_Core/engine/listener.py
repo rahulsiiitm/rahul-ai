@@ -34,7 +34,7 @@ class ZeroListener:
         self.on_transcription = on_transcription
         self.on_status        = on_status
         self._stop            = threading.Event()
-        self._recording       = False
+        self._recording       = False 
 
         self._log("Loading Whisper STT model …")
         self.whisper = WhisperModel(
