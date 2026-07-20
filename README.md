@@ -4,6 +4,14 @@
   <br />
   <h1>Rahul AI</h1>
   <p><strong>The backend code and terminal interface for my personal AI projects.</strong></p>
+  
+  <p>
+    <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
+    <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
+    <img src="https://img.shields.io/badge/Google_Gemini-8E75B2?style=flat-square&logo=google&logoColor=white" alt="Google Gemini" />
+    <img src="https://img.shields.io/badge/xAI_Grok-000000?style=flat-square&logo=x&logoColor=white" alt="xAI Grok" />
+    <img src="https://img.shields.io/badge/License-Proprietary-red?style=flat-square" alt="License" />
+  </p>
   <br />
 </div>
 
