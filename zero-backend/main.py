@@ -6,7 +6,8 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from openai import OpenAI
 from dotenv import load_dotenv
 import asyncio
@@ -97,16 +98,18 @@ except Exception as e:
     projects_data, experience_data, achievements_data = [], [], []
     personality_data = {"tagline": "", "traits": [], "interests": [], "dislikes": [], "communication_style": {}, "fun_facts": [], "philosophy": {}, "currently": {}}
 
+def format_project(p):
+    links = p.get("links") or {}
+    text = (f"• {p.get('title')} ({p.get('year')}) — {p.get('tagline')}\n"
+            f"  Role: {p.get('role')} | Stack: {', '.join(p.get('stack', []))}\n"
+            f"  What it does: {p.get('solution')}")
+    if links.get("github"): text += f"\n  GitHub: {links.get('github')}"
+    if links.get("demo"): text += f"\n  Demo: {links.get('demo')}"
+    if links.get("pypi"): text += f"\n  PyPI: {links.get('pypi')}"
+    return text
+
 # Build KB Strings
-projects_kb = "\n\n".join([
-    f"• {p.get('title')} ({p.get('year')}) — {p.get('tagline')}\n"
-    f"  Role: {p.get('role')} | Stack: {', '.join(p.get('stack', []))}\n"
-    f"  What it does: {p.get('solution')}"
-    + (f"\n  GitHub: {p.get('links', {}).get('github')}" if p.get("links", {}).get("github") else "")
-    + (f"\n  Demo: {p.get('links', {}).get('demo')}" if p.get("links", {}).get("demo") else "")
-    + (f"\n  PyPI: {p.get('links', {}).get('pypi')}" if p.get("links", {}).get("pypi") else "")
-    for p in projects_data
-])
+projects_kb = "\n\n".join(format_project(p) for p in projects_data)
 
 experience_kb = "\n\n".join([
     f"• {e.get('role')} @ {e.get('company')} ({e.get('period')}, {e.get('location')})\n"
@@ -200,11 +203,7 @@ class ChatRequest(BaseModel):
     messages: List[Message]
 
 def gemini_generator(messages_data):
-    genai.configure(api_key=os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY"))
-    model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash',
-        system_instruction=system_prompt
-    )
+    client = genai.Client(api_key=os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY"))
     
     # Format messages for Gemini
     formatted_messages = []
@@ -217,9 +216,15 @@ def gemini_generator(messages_data):
         if len(content) > 4000:
             content = content[:4000]
             
-        formatted_messages.append({"role": role, "parts": [content]})
+        formatted_messages.append(types.Content(role=role, parts=[types.Part.from_text(content)]))
 
-    response = model.generate_content(formatted_messages, stream=True)
+    response = client.models.generate_content_stream(
+        model='gemini-2.5-flash',
+        contents=formatted_messages,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+        )
+    )
     for chunk in response:
         if chunk.text:
             yield chunk.text
