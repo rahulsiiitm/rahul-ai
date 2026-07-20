@@ -57,3 +57,9 @@ To run the backend, create a `.env` file in the `zero-backend/` folder with your
 GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_key
 GROQ_API_KEY=your_grok_key
 ```
+
+---
+
+## License
+
+This project is proprietary. All rights reserved. See the [LICENSE](LICENSE) file for more information.
