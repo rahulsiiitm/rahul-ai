@@ -2,8 +2,8 @@
   <img src="assets/banner.png" alt="Rahul AI Banner" width="100%" />
   
   <br />
-  <h1>Rahul AI</h1>
-  <p><strong>The backend code and terminal interface for my personal AI projects.</strong></p>
+  <h1>Rahul AI Hub</h1>
+  <p><strong>The backend code and terminal interface for my personal AI chatbots and agents projects.</strong></p>
   
   <p>
     <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
