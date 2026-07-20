@@ -29,7 +29,7 @@ async def gemini_generator(messages_data: List[Message]) -> AsyncGenerator[str, 
 
     while True:
         response = await client.aio.models.generate_content_stream(
-            model='gemini-3.5-flash',
+            model='gemini-1.5-flash',
             contents=formatted_messages,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
@@ -67,7 +67,8 @@ async def gemini_generator(messages_data: List[Message]) -> AsyncGenerator[str, 
 async def xai_generator(messages_data: List[Message]) -> AsyncGenerator[str, None]:
     client = AsyncOpenAI(
         base_url="https://api.x.ai/v1",
-        api_key=os.environ.get("GROQ_API_KEY", "")
+        api_key=os.environ.get("GROQ_API_KEY", ""),
+        max_retries=0
     )
     
     formatted_messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]

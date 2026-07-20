@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import AsyncGenerator
 
@@ -25,7 +26,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         try:
             generator = gemini_generator(messages)
             try:
-                first_chunk = await generator.__anext__()
+                first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=8.0)
             except StopAsyncIteration:
                 first_chunk = ""
             
@@ -49,7 +50,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         try:
             generator = xai_generator(messages)
             try:
-                first_chunk = await generator.__anext__()
+                first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=8.0)
             except StopAsyncIteration:
                 first_chunk = ""
                 
