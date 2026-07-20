@@ -1,71 +1,59 @@
 <div align="center">
-  <img src="assets/banner.png" alt="Rahul AI Hub Banner" width="100%" />
+  <img src="assets/banner.png" alt="Rahul AI Banner" width="100%" />
   
   <br />
-  <h1>Rahul AI Hub</h1>
-  <p><strong>A centralized monorepo for my autonomous AI agents, backends, and terminal interfaces.</strong></p>
+  <h1>Rahul AI</h1>
+  <p><strong>The backend code and terminal interface for my personal AI projects.</strong></p>
   <br />
 </div>
 
-## 🌌 Overview
+## Overview
 
-**Rahul AI Hub** is the central nervous system for all my AI-related projects. Instead of scattered repositories, this hub houses the core intelligence, specialized backends, and local testing environments for my AI agents (like **Zero**).
-
-This architecture allows for seamless integration with external frontends (like my portfolio) while keeping the complex machine-learning, prompt engineering, and API integrations isolated and easily testable.
+This repository holds the code for my personal AI tools. I built this to keep my AI backend logic in one place instead of scattering it across different repos. Right now, it powers **Zero** (the chatbot you can talk to on my portfolio) and includes a local terminal UI I use for testing.
 
 ---
 
-## 📂 Repository Structure
+## What's Inside
 
-### `1. zero-backend/` (FastAPI)
-The standalone production backend for **Zero**, my AI alter-ego deployed on my portfolio.
-- **Tech Stack:** Python, FastAPI, Google Generative AI (Gemini), OpenAI SDK (xAI/Grok fallback).
-- **Features:** 
-  - Streams dynamic AI responses matching my exact personality and resume data.
-  - Implements an IP-based rate limiter.
-  - Auto-pings its own `keep-alive` endpoint to prevent Render free-tier spin-downs.
+### `1. zero-backend/`
+This is a FastAPI backend that runs the **Zero** chatbot on my portfolio website. 
+- It uses Gemini by default, with an automatic fallback to xAI (Grok) if Gemini goes down.
+- Streams responses in real-time.
+- Has basic rate-limiting to prevent spam.
 
-### `2. ZERO_Core/` (Terminal TUI)
-A highly advanced terminal-based user interface (TUI) for local interactions and testing.
-- **Tech Stack:** Python, Textual, Ollama.
-- **Features:**
-  - Three-panel UI layout.
-  - Connects to local LLMs via Ollama for zero-latency, private inference.
-  - Built-in dispatcher and job tracker.
+### `2. ZERO_Core/`
+A local terminal UI (TUI) I use for testing models and scripts without needing a web browser.
+- Built with Python and Textual.
+- Connects directly to local models running via Ollama.
 
 ---
 
-## 🚀 Quick Start (Zero Backend)
+## Running the Backend Locally
 
-To run the portfolio AI backend locally:
+If you want to spin up the backend API on your own machine:
 
 ```bash
-# 1. Navigate to the backend directory
+# Move into the backend folder
 cd zero-backend
 
-# 2. Create and activate a virtual environment
+# Setup a virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 3. Install dependencies
+# Install the required packages
 pip install -r requirements.txt
 
-# 4. Run the FastAPI server
+# Start the API server
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
-*The API will be available at `http://localhost:8000/api/chat`*
+
+The API will be live at `http://localhost:8000/api/chat`.
 
 ---
 
-## 🔐 Environment Variables
-You will need an `.env` file in the `zero-backend/` directory with the following keys:
+## Environment Variables
+To run the backend, create a `.env` file in the `zero-backend/` folder with your API keys:
 ```env
 GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_key
 GROQ_API_KEY=your_grok_key
 ```
-
----
-
-<div align="center">
-  <i>Built at the intersection of ML and clean Architecture by Rahul Sharma.</i>
-</div>
