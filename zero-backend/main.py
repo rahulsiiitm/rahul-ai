@@ -234,7 +234,7 @@ async def gemini_generator(messages_data):
         contents=formatted_messages,
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
-            max_output_tokens=800,
+            max_output_tokens=2048,
         )
     )
     async for chunk in response:
@@ -265,7 +265,7 @@ async def xai_generator(messages_data):
         model="grok-beta",
         messages=formatted_messages,
         stream=True,
-        max_tokens=800
+        max_tokens=2048
     )
     async for chunk in response:
         delta = chunk.choices[0].delta.content
