@@ -216,10 +216,10 @@ def gemini_generator(messages_data):
         if len(content) > 4000:
             content = content[:4000]
             
-        formatted_messages.append(types.Content(role=role, parts=[types.Part.from_text(content)]))
+        formatted_messages.append(types.Content(role=role, parts=[types.Part.from_text(text=content)]))
 
     response = client.models.generate_content_stream(
-        model='gemini-2.5-flash',
+        model='gemini-3.5-flash',
         contents=formatted_messages,
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
