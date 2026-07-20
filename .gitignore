@@ -1,6 +1,6 @@
 ZERO_Core/voices/*.onnx
 .env
-.venv
+.venv/
 __pycache__/
 *.pyc
 scratch/
