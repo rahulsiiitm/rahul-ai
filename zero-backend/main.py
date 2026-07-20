@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 import asyncio
 import httpx
@@ -213,7 +213,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[Message]
 
-def gemini_generator(messages_data):
+async def gemini_generator(messages_data):
     client = genai.Client(api_key=os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY"))
     
     # Format messages for Gemini
@@ -229,7 +229,7 @@ def gemini_generator(messages_data):
             
         formatted_messages.append(types.Content(role=role, parts=[types.Part.from_text(text=content)]))
 
-    response = client.models.generate_content_stream(
+    response = await client.aio.models.generate_content_stream(
         model='gemini-3.5-flash',
         contents=formatted_messages,
         config=types.GenerateContentConfig(
@@ -237,7 +237,7 @@ def gemini_generator(messages_data):
             max_output_tokens=800,
         )
     )
-    for chunk in response:
+    async for chunk in response:
         try:
             if chunk.text:
                 yield chunk.text
@@ -245,8 +245,8 @@ def gemini_generator(messages_data):
             # Handle potential ValueError if safety ratings block the response
             pass
 
-def xai_generator(messages_data):
-    client = OpenAI(
+async def xai_generator(messages_data):
+    client = AsyncOpenAI(
         base_url="https://api.x.ai/v1",
         api_key=os.environ.get("GROQ_API_KEY") # User used this key for xAI in their code
     )
@@ -261,20 +261,20 @@ def xai_generator(messages_data):
             content = content[:1000]
         formatted_messages.append({"role": msg.role, "content": content})
 
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model="grok-beta",
         messages=formatted_messages,
         stream=True,
         max_tokens=800
     )
-    for chunk in response:
+    async for chunk in response:
         delta = chunk.choices[0].delta.content
         if delta:
             yield delta
 
 
 @app.post("/api/chat")
-def chat_endpoint(request: Request, body: ChatRequest):
+async def chat_endpoint(request: Request, body: ChatRequest):
     # Rate Limiting
     ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or request.client.host
     if is_rate_limited(ip):
@@ -287,13 +287,14 @@ def chat_endpoint(request: Request, body: ChatRequest):
         try:
             generator = gemini_generator(messages)
             try:
-                first_chunk = next(generator)
-            except StopIteration:
+                first_chunk = await generator.__anext__()
+            except StopAsyncIteration:
                 first_chunk = ""
             
-            def stream():
+            async def stream():
                 if first_chunk: yield first_chunk
-                yield from generator
+                async for chunk in generator:
+                    yield chunk
                 
             headers = {
                 "X-Accel-Buffering": "no",
@@ -310,13 +311,14 @@ def chat_endpoint(request: Request, body: ChatRequest):
         try:
             generator = xai_generator(messages)
             try:
-                first_chunk = next(generator)
-            except StopIteration:
+                first_chunk = await generator.__anext__()
+            except StopAsyncIteration:
                 first_chunk = ""
                 
-            def stream():
+            async def stream():
                 if first_chunk: yield first_chunk
-                yield from generator
+                async for chunk in generator:
+                    yield chunk
                 
             headers = {
                 "X-Accel-Buffering": "no",
