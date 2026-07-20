@@ -29,7 +29,7 @@ async def gemini_generator(messages_data: List[Message]) -> AsyncGenerator[str, 
 
     while True:
         response = await client.aio.models.generate_content_stream(
-            model='gemini-1.5-flash',
+            model='gemini-3.5-flash',
             contents=formatted_messages,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
