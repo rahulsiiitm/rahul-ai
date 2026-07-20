@@ -70,9 +70,15 @@ rate_limit_map = {}
 
 def is_rate_limited(ip: str) -> bool:
     now = int(time.time() * 1000)
+    
+    # Cleanup old entries to prevent memory leak
+    expired = [k for k, v in rate_limit_map.items() if now > v["reset_at"]]
+    for k in expired:
+        del rate_limit_map[k]
+        
     entry = rate_limit_map.get(ip)
     
-    if not entry or now > entry["reset_at"]:
+    if not entry:
         rate_limit_map[ip] = {"count": 1, "reset_at": now + RATE_LIMIT_WINDOW_MS}
         return False
         
@@ -196,7 +202,7 @@ IMPORTANT:
 
 class Message(BaseModel):
     role: str
-    content: str
+    content: Optional[str] = ""
     parts: Optional[List[Any]] = None
 
 class ChatRequest(BaseModel):
@@ -219,15 +225,19 @@ def gemini_generator(messages_data):
         formatted_messages.append(types.Content(role=role, parts=[types.Part.from_text(text=content)]))
 
     response = client.models.generate_content_stream(
-        model='gemini-3.5-flash',
+        model='gemini-2.0-flash',
         contents=formatted_messages,
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
         )
     )
     for chunk in response:
-        if chunk.text:
-            yield chunk.text
+        try:
+            if chunk.text:
+                yield chunk.text
+        except ValueError:
+            # Handle potential ValueError if safety ratings block the response
+            pass
 
 def xai_generator(messages_data):
     client = OpenAI(
@@ -257,7 +267,7 @@ def xai_generator(messages_data):
 
 
 @app.post("/api/chat")
-async def chat_endpoint(request: Request, body: ChatRequest):
+def chat_endpoint(request: Request, body: ChatRequest):
     # Rate Limiting
     ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or request.client.host
     if is_rate_limited(ip):
@@ -268,7 +278,17 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     # Try Gemini first
     if os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY"):
         try:
-            return StreamingResponse(gemini_generator(messages), media_type="text/plain")
+            generator = gemini_generator(messages)
+            try:
+                first_chunk = next(generator)
+            except StopIteration:
+                first_chunk = ""
+            
+            def stream():
+                if first_chunk: yield first_chunk
+                yield from generator
+                
+            return StreamingResponse(stream(), media_type="text/plain")
         except Exception as e:
             print(f"Gemini failed: {e}")
             pass
@@ -276,7 +296,17 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     # Fallback to xAI
     if os.environ.get("GROQ_API_KEY"):
         try:
-            return StreamingResponse(xai_generator(messages), media_type="text/plain")
+            generator = xai_generator(messages)
+            try:
+                first_chunk = next(generator)
+            except StopIteration:
+                first_chunk = ""
+                
+            def stream():
+                if first_chunk: yield first_chunk
+                yield from generator
+                
+            return StreamingResponse(stream(), media_type="text/plain")
         except Exception as e:
             print(f"xAI failed: {e}")
             pass
