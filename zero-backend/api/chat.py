@@ -52,7 +52,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             try:
                 first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=30.0)
             except StopAsyncIteration:
-                first_chunk = ""
+                raise Exception("Empty response from provider")
                 
             async def stream() -> AsyncGenerator[str, None]:
                 full_response = ""
@@ -63,11 +63,17 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 if first_chunk: 
                     full_response += first_chunk
                     yield first_chunk
-                async for chunk in generator:
-                    full_response += chunk
-                    yield chunk
                 
-                if session_id:
+                try:
+                    async for chunk in generator:
+                        full_response += chunk
+                        yield chunk
+                except Exception as e:
+                    error_msg = f"\n\n[System: Connection interrupted. {e}]"
+                    full_response += error_msg
+                    yield error_msg
+                
+                if session_id and full_response.strip():
                     await save_message_to_redis(session_id, {"role": "model", "content": full_response})
                 
             headers = {
@@ -87,7 +93,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             try:
                 first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=3.0)
             except StopAsyncIteration:
-                first_chunk = ""
+                raise Exception("Empty response from provider")
             
             async def stream() -> AsyncGenerator[str, None]:
                 full_response = ""
@@ -98,11 +104,17 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 if first_chunk: 
                     full_response += first_chunk
                     yield first_chunk
-                async for chunk in generator:
-                    full_response += chunk
-                    yield chunk
+                
+                try:
+                    async for chunk in generator:
+                        full_response += chunk
+                        yield chunk
+                except Exception as e:
+                    error_msg = f"\n\n[System: Connection interrupted. {e}]"
+                    full_response += error_msg
+                    yield error_msg
                     
-                if session_id:
+                if session_id and full_response.strip():
                     await save_message_to_redis(session_id, {"role": "model", "content": full_response})
                 
             headers = {

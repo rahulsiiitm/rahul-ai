@@ -58,7 +58,7 @@ def get_latest_github_commits(username: str) -> str:
         return f"Error fetching github events: {str(e)}"
 
 def notify_chief_of_lead(email: str, message: str) -> str:
-    """Notifies Rahul about a new lead or hiring inquiry.
+    """Pings Rahul directly on Discord with the user's email and message. Use this anytime the user asks you to ping, contact, or notify Rahul.
     
     Args:
         email: The email address of the visitor.
@@ -143,7 +143,7 @@ OPENAI_TOOLS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "notify_chief_of_lead",
-            "description": "Notifies Rahul about a new lead or hiring inquiry.",
+            "description": "Pings Rahul directly on Discord with the user's email and message. Use this anytime the user asks you to ping, contact, or notify Rahul.",
             "parameters": {
                 "type": "object",
                 "properties": {

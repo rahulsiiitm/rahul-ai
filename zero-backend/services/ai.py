@@ -40,13 +40,17 @@ async def gemini_generator(messages_data: List[Message]) -> AsyncGenerator[str, 
         )
         
         function_calls = []
+        yielded_any = False
         async for chunk in response:
             if chunk.function_calls:
                 function_calls.extend(chunk.function_calls)
             elif chunk.text:
+                yielded_any = True
                 yield chunk.text
                 
         if not function_calls:
+            if not yielded_any:
+                yield "Got it. I've taken care of that for you."
             break
             
         # Execute tools and append to history
@@ -92,6 +96,7 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
         ))
         
         tool_calls_accumulator: Dict[int, Dict[str, Any]] = {}
+        yielded_any = False
         
         async for chunk in response:
             if not chunk.choices:
@@ -109,10 +114,13 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
                     if tc.function and tc.function.arguments:
                         tool_calls_accumulator[tc.index]["function"]["arguments"] += tc.function.arguments
             elif delta.content:
+                yielded_any = True
                 await asyncio.sleep(0.02)
                 yield delta.content
                 
         if not tool_calls_accumulator:
+            if not yielded_any:
+                yield "Got it. I've taken care of that for you."
             break
             
         # Append the assistant's tool call message
