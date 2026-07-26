@@ -23,8 +23,8 @@ async def gemini_generator(messages_data: List[Message]) -> AsyncGenerator[str, 
             content = "".join([str(p.get("text", "")) for p in msg.parts if isinstance(p, dict)])
             
         content = content or ""
-        if len(content) > 1000:
-            content = content[:1000]
+        if len(content) > 4000:
+            content = content[:4000] + "..."
             
         formatted_messages.append(types.Content(role=role, parts=[types.Part.from_text(text=content)]))
 
@@ -50,7 +50,7 @@ async def gemini_generator(messages_data: List[Message]) -> AsyncGenerator[str, 
                 
         if not function_calls:
             if not yielded_any:
-                yield "Got it. I've taken care of that for you."
+                yield "I'm having a little trouble processing that. Can you rephrase?"
             break
             
         # Execute tools and append to history
@@ -82,8 +82,8 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
         if not content and msg.parts:
             content = "".join([str(p.get("text", "")) for p in msg.parts if isinstance(p, dict)])
         content = content or ""
-        if len(content) > 1000:
-            content = content[:1000]
+        if len(content) > 4000:
+            content = content[:4000] + "..."
         formatted_messages.append({"role": msg.role, "content": content})
 
     while True:
@@ -120,7 +120,7 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
                 
         if not tool_calls_accumulator:
             if not yielded_any:
-                yield "Got it. I've taken care of that for you."
+                yield "I'm having a little trouble processing that. Can you rephrase?"
             break
             
         # Append the assistant's tool call message

@@ -86,9 +86,10 @@
       "Can spend an entire weekend researching one niche topic.",
       "Treats personal projects like startup products.",
       "Will automate a task instead of repeating it twice.",
-      "Has opinions about tokenizers that concern normal people.",
       "Keeps opening new tabs until the browser becomes a memory benchmark.",
-      "Prefers dark mode on everything."
+      "Prefers dark mode on everything.",
+      "Hyperfixates on multiple interests with zero consistency.",
+      "Fiercely loyal to his single trusty laptop because he's broke."
     ],
 
     "debug_logs": [
@@ -114,13 +115,15 @@
     "Drone autonomy",
     "Knowledge systems",
     "Graph RAG",
-    "Tokenizer research",
     "Performance optimization",
     "Open source",
     "Basketball",
     "Sketching",
     "Cars",
-    "Sci-fi"
+    "Sci-fi",
+    "Gaming",
+    "Anime",
+    "Hardware tinkering"
   ],
 
   "tech_stack": {
@@ -168,7 +171,9 @@
       "Blender",
       "Linux",
       "Arch Linux",
-      "Hyprland"
+      "Hyprland",
+      "VS Code",
+      "Antigravity"
     ]
   },
 
@@ -205,20 +210,17 @@
 
   "currently": {
     "building": [
-      "Zero AI assistant",
-      "Portfolio",
-      "VidChain v2",
-      "LLM deployment infrastructure"
+      "(I fetch this dynamically from GitHub. Use get_latest_github_commits on 'rahulsiiitm' to see what he's pushing right now.)"
     ],
     "learning": [
       "Graph RAG",
       "Edge optimization",
       "Inference serving",
-      "High-performance AI deployment"
+      "High-performance AI deployment",
+      "...and constantly exploring new papers and frameworks"
     ],
     "working_at": [
-      "IIIT Manipur",
-      "IIT Roorkee Summer Internship"
+      "IIIT Manipur"
     ]
   },
 
@@ -280,18 +282,22 @@
     "Meaningless buzzwords",
     "Vague error messages",
     "Tutorial hell",
-    "People confusing confidence with competence"
+    "People confusing confidence with competence",
+    "AI-generated slop content",
+    "ChatGPT-style overly rounded corporate AI speak"
   ],
 
   "fun_facts": [
     "Built SUTRA, an IIT Roorkee RAG assistant during a summer internship.",
     "Signed an MoU with Manipur IT Hub for AgriHive.",
-    "Has surprisingly strong opinions about tokenizers.",
     "Can spend hours tuning inference speed.",
     "Enjoys both backend architecture and UI polish.",
     "Runs Arch Linux because apparently life wasn't difficult enough.",
     "Prefers Peter Parker style AI assistants over robotic ones.",
-    "Has deployed projects minutes before deadlines and watched them somehow work."
+    "Has deployed projects minutes before deadlines and watched them somehow work.",
+    "Incredibly proud of getting selected for the IIT Roorkee internship.",
+    "Eventually plans to pivot into hardware engineering.",
+    "Determined to build his own startup from the ground up (just wait and watch)."
   ],
 
   "hardware": {

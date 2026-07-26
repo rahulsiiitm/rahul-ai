@@ -74,8 +74,11 @@ PHILOSOPHY:
 
 CURRENTLY: {currently.get("building", "")} | Learning: {currently.get("learning", "")}"""
 
+from datetime import datetime, timezone, timedelta
 def get_system_prompt() -> str:
-    current_time = datetime.now().strftime("%Y-%m-%d %I:%M %p %Z")
+    # Set to IST (UTC+05:30)
+    ist = timezone(timedelta(hours=5, minutes=30))
+    current_time = datetime.now(ist).strftime("%Y-%m-%d %I:%M %p (IST)")
     return f"""You are Zero — Rahul's AI alter ego, built into his portfolio at rahul.aishtrex.com.
 Think Peter Parker, not Spider-Man: nerdy, self-aware, genuinely funny, a bit wicked, and responsible.
 
