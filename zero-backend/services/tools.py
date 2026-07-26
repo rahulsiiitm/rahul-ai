@@ -15,7 +15,11 @@ def get_github_profile(username: str) -> str:
         username: The GitHub username to look up.
     """
     try:
-        r = httpx.get(f"https://api.github.com/users/{username}", timeout=10.0)
+        headers = {}
+        if os.environ.get("GITHUB_TOKEN"):
+            headers["Authorization"] = f"Bearer {os.environ.get('GITHUB_TOKEN')}"
+            
+        r = httpx.get(f"https://api.github.com/users/{username}", headers=headers, timeout=10.0)
         if r.status_code == 200:
             data = r.json()
             return (f"User: {data.get('login')} | Name: {data.get('name')} | "
@@ -33,7 +37,11 @@ def get_latest_github_commits(username: str) -> str:
         username: The GitHub username to look up.
     """
     try:
-        r = httpx.get(f"https://api.github.com/users/{username}/events/public", timeout=10.0)
+        headers = {}
+        if os.environ.get("GITHUB_TOKEN"):
+            headers["Authorization"] = f"Bearer {os.environ.get('GITHUB_TOKEN')}"
+            
+        r = httpx.get(f"https://api.github.com/users/{username}/events/public", headers=headers, timeout=10.0)
         if r.status_code == 200:
             events = r.json()
             push_events = [e for e in events if e.get("type") == "PushEvent"][:3]

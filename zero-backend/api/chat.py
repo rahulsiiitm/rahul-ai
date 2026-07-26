@@ -36,7 +36,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
     if is_rate_limited(ip):
         raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
     
-    messages = body.messages[:10]
+    messages = body.messages[-10:]
     session_id = body.session_id
     
     if session_id and messages:
