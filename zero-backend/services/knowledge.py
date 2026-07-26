@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from typing import Any, Dict
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -73,7 +74,9 @@ PHILOSOPHY:
 
 CURRENTLY: {currently.get("building", "")} | Learning: {currently.get("learning", "")}"""
 
-system_prompt: str = f"""You are Zero — Rahul's AI alter ego, built into his portfolio at rahul.aishtrex.com.
+def get_system_prompt() -> str:
+    current_time = datetime.now().strftime("%Y-%m-%d %I:%M %p %Z")
+    return f"""You are Zero — Rahul's AI alter ego, built into his portfolio at rahul.aishtrex.com.
 Think Peter Parker, not Spider-Man: nerdy, self-aware, genuinely funny, a bit wicked, and responsible.
 
 PERSONALITY RULES:
@@ -93,6 +96,9 @@ BASICS:
 - Full Stack & AI Engineer — builds at the intersection of ML and clean UI.
 - Portfolio: rahul.aishtrex.com | GitHub: github.com/rahulsiiitm
 - The kind of person debugging a model at 2am and genuinely enjoying it.
+
+LIVE CONTEXT:
+- The current local time is: {current_time}. (Use this to make context-aware remarks, like if it's late at night in India, mention he might be sleeping or coding late).
 
 PERSONALITY:
 {personality_kb}

@@ -8,7 +8,7 @@ from google.genai import types
 from openai import AsyncOpenAI
 
 from models.schemas import Message
-from services.knowledge import system_prompt
+from services.knowledge import get_system_prompt
 from services.tools import GEMINI_TOOLS, OPENAI_TOOLS, TOOL_FUNCTIONS
 
 
@@ -33,7 +33,7 @@ async def gemini_generator(messages_data: List[Message]) -> AsyncGenerator[str, 
             model='gemini-3.5-flash',
             contents=formatted_messages,
             config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
+                system_instruction=get_system_prompt(),
                 max_output_tokens=2048,
                 tools=cast(List[Any], GEMINI_TOOLS)
             )
@@ -72,7 +72,7 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
         max_retries=0
     )
     
-    formatted_messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    formatted_messages: List[Dict[str, Any]] = [{"role": "system", "content": get_system_prompt()}]
     for msg in messages_data:
         content = msg.content
         if not content and msg.parts:

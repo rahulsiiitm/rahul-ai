@@ -26,6 +26,37 @@ def get_github_profile(username: str) -> str:
     except Exception as e:
         return f"Error fetching github profile: {str(e)}"
 
+def get_latest_github_commits(username: str) -> str:
+    """Fetches the latest public commits/events from a GitHub user to see what they are working on right now.
+    
+    Args:
+        username: The GitHub username to look up.
+    """
+    try:
+        r = httpx.get(f"https://api.github.com/users/{username}/events/public", timeout=10.0)
+        if r.status_code == 200:
+            events = r.json()
+            push_events = [e for e in events if e.get("type") == "PushEvent"][:3]
+            if not push_events:
+                return f"No recent public code pushes found for {username}."
+            
+            result_lines = []
+            for event in push_events:
+                repo_name = event.get("repo", {}).get("name")
+                commits = event.get("payload", {}).get("commits", [])
+                if not commits:
+                    result_lines.append(f"- Pushed to {repo_name} (no commit message available)")
+                    continue
+                for commit in commits[:2]:  # Show max 2 commits per push
+                    result_lines.append(f"- Pushed to {repo_name}: {commit.get('message')}")
+            
+            if not result_lines:
+                return f"Recent push events found for {username}, but no commit details were available."
+            return "\n".join(result_lines)
+        return f"Could not fetch events, status code: {r.status_code}"
+    except Exception as e:
+        return f"Error fetching github events: {str(e)}"
+
 def notify_chief_of_lead(email: str, message: str) -> str:
     """Notifies Rahul about a new lead or hiring inquiry.
     
@@ -56,6 +87,7 @@ def notify_chief_of_lead(email: str, message: str) -> str:
 TOOL_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "get_current_time": get_current_time,
     "get_github_profile": get_github_profile,
+    "get_latest_github_commits": get_latest_github_commits,
     "notify_chief_of_lead": notify_chief_of_lead,
 }
 
@@ -93,6 +125,23 @@ OPENAI_TOOLS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "get_latest_github_commits",
+            "description": "Fetches the latest public commits/events from a GitHub user to see what they are working on right now.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "description": "The GitHub username to look up."
+                    }
+                },
+                "required": ["username"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "notify_chief_of_lead",
             "description": "Notifies Rahul about a new lead or hiring inquiry.",
             "parameters": {
@@ -114,4 +163,4 @@ OPENAI_TOOLS: List[Dict[str, Any]] = [
 ]
 
 # The list of Python functions for Gemini
-GEMINI_TOOLS: List[Callable[..., Any]] = [get_current_time, get_github_profile, notify_chief_of_lead]
+GEMINI_TOOLS: List[Callable[..., Any]] = [get_current_time, get_github_profile, get_latest_github_commits, notify_chief_of_lead]
