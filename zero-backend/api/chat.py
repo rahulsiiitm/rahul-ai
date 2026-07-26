@@ -10,10 +10,16 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from core.security import is_rate_limited
+from core.redis import save_message_to_redis, get_chat_history
 from models.schemas import ChatRequest
 from services.ai import gemini_generator, openrouter_generator
 
 router = APIRouter()
+
+@router.get("/chat/history/{session_id}")
+async def get_history(session_id: str):
+    history = await get_chat_history(session_id)
+    return {"messages": history}
 
 @router.post("/chat")
 async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingResponse:
@@ -31,7 +37,14 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
     
     messages = body.messages[:10]
+    session_id = body.session_id
     
+    if session_id and messages:
+        # Save the latest user message to Redis (assuming the last message is the user's prompt)
+        latest_user_msg = messages[-1]
+        if latest_user_msg.role == "user":
+            await save_message_to_redis(session_id, latest_user_msg.dict())
+
     # Try OpenRouter first
     if os.environ.get("OPENROUTER_API_KEY"):
         try:
@@ -42,11 +55,20 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 first_chunk = ""
                 
             async def stream() -> AsyncGenerator[str, None]:
+                full_response = ""
                 if is_cold_start:
-                    yield "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
-                if first_chunk: yield first_chunk
+                    cold_start_msg = "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
+                    full_response += cold_start_msg
+                    yield cold_start_msg
+                if first_chunk: 
+                    full_response += first_chunk
+                    yield first_chunk
                 async for chunk in generator:
+                    full_response += chunk
                     yield chunk
+                
+                if session_id:
+                    await save_message_to_redis(session_id, {"role": "model", "content": full_response})
                 
             headers = {
                 "X-Accel-Buffering": "no",
@@ -68,11 +90,20 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 first_chunk = ""
             
             async def stream() -> AsyncGenerator[str, None]:
+                full_response = ""
                 if is_cold_start:
-                    yield "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
-                if first_chunk: yield first_chunk
+                    cold_start_msg = "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
+                    full_response += cold_start_msg
+                    yield cold_start_msg
+                if first_chunk: 
+                    full_response += first_chunk
+                    yield first_chunk
                 async for chunk in generator:
+                    full_response += chunk
                     yield chunk
+                    
+                if session_id:
+                    await save_message_to_redis(session_id, {"role": "model", "content": full_response})
                 
             headers = {
                 "X-Accel-Buffering": "no",
@@ -85,9 +116,18 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             pass
 
     async def fallback_stream() -> AsyncGenerator[str, None]:
+        full_response = ""
         if is_cold_start:
-            yield "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
-        yield '🏎️ "Zero left the pit..."\n\nIf you are seeing this msg then probably my free api credits are gone please try again later hehehe'
+            cold_start_msg = "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
+            full_response += cold_start_msg
+            yield cold_start_msg
+            
+        fallback_msg = '🏎️ "Zero left the pit..."\n\nIf you are seeing this msg then probably my free api credits are gone please try again later hehehe'
+        full_response += fallback_msg
+        yield fallback_msg
+        
+        if session_id:
+            await save_message_to_redis(session_id, {"role": "model", "content": full_response})
         
     return StreamingResponse(
         fallback_stream(),
