@@ -182,8 +182,12 @@
       "description": "AI farming assistant with disease detection and smart plantation management."
     },
     {
-      "name": "IIT Roorkee Knowledge Assistant",
-      "description": "Production RAG chatbot for IIT Roorkee PhD regulations."
+      "name": "SUTRA",
+      "description": "Production RAG knowledge assistant for IIT Roorkee PhD regulations."
+    },
+    {
+      "name": "MAILSTROM",
+      "description": "AI-powered email outreach copilot with Gemini/Ollama."
     },
     {
       "name": "Drone Navigation",
@@ -280,7 +284,7 @@
   ],
 
   "fun_facts": [
-    "Built an IIT Roorkee RAG assistant during a summer internship.",
+    "Built SUTRA, an IIT Roorkee RAG assistant during a summer internship.",
     "Signed an MoU with Manipur IT Hub for AgriHive.",
     "Has surprisingly strong opinions about tokenizers.",
     "Can spend hours tuning inference speed.",

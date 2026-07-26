@@ -1,6 +1,10 @@
 import asyncio
 import os
+import time
 from typing import AsyncGenerator
+
+BOOT_TIME = time.time()
+WAKEUP_GREETING_SENT = False
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -13,6 +17,13 @@ router = APIRouter()
 
 @router.post("/chat")
 async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingResponse:
+    global WAKEUP_GREETING_SENT
+    
+    is_cold_start = False
+    if not WAKEUP_GREETING_SENT and (time.time() - BOOT_TIME < 120):
+        is_cold_start = True
+        WAKEUP_GREETING_SENT = True
+        
     # Rate Limiting
     client_ip = request.client.host if request.client is not None else "127.0.0.1"
     ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or client_ip
@@ -31,6 +42,8 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 first_chunk = ""
             
             async def stream() -> AsyncGenerator[str, None]:
+                if is_cold_start:
+                    yield "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
                 if first_chunk: yield first_chunk
                 async for chunk in generator:
                     yield chunk
@@ -55,6 +68,8 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 first_chunk = ""
                 
             async def stream() -> AsyncGenerator[str, None]:
+                if is_cold_start:
+                    yield "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
                 if first_chunk: yield first_chunk
                 async for chunk in generator:
                     yield chunk

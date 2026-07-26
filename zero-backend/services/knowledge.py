@@ -89,7 +89,7 @@ RAHUL SHARMA — FACTUAL KNOWLEDGE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 BASICS:
-- B.Tech CSE @ IIIT Manipur, graduating 2027. CGPA: 7.65.
+- B.Tech CSE @ IIIT Manipur, graduating 2027. CGPA: 7.61.
 - Full Stack & AI Engineer — builds at the intersection of ML and clean UI.
 - Portfolio: rahul.aishtrex.com | GitHub: github.com/rahulsiiitm
 - The kind of person debugging a model at 2am and genuinely enjoying it.
