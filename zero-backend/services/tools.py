@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List
 
 import httpx
-
+import os
 
 def get_current_time() -> str:
     """Returns the current date and time."""
@@ -26,10 +26,37 @@ def get_github_profile(username: str) -> str:
     except Exception as e:
         return f"Error fetching github profile: {str(e)}"
 
+def notify_chief_of_lead(email: str, message: str) -> str:
+    """Notifies Rahul about a new lead or hiring inquiry.
+    
+    Args:
+        email: The email address of the visitor.
+        message: The context or message from the visitor about why they are reaching out.
+    """
+    webhook_url = os.environ.get("LEAD_WEBHOOK_URL")
+    print(f"[LEAD EXTRACTED] Email: {email} | Intent: {message}")
+    
+    if not webhook_url:
+        return "Webhook URL not configured in backend, but lead was logged successfully to the server console."
+        
+    try:
+        # Assuming standard Discord/Slack webhook format
+        payload = {
+            "content": f"🚨 **New Lead from Zero Bot!**\n**Email:** {email}\n**Message:** {message}"
+        }
+        r = httpx.post(webhook_url, json=payload, timeout=10.0)
+        if r.status_code in [200, 204]:
+            return "Lead successfully forwarded to the Chief."
+        return f"Failed to send lead, status code: {r.status_code}"
+    except Exception as e:
+        return f"Error sending lead: {str(e)}"
+
+
 # A dictionary to look up functions by name
 TOOL_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "get_current_time": get_current_time,
     "get_github_profile": get_github_profile,
+    "notify_chief_of_lead": notify_chief_of_lead,
 }
 
 # The schemas for OpenAI / xAI
@@ -62,8 +89,29 @@ OPENAI_TOOLS: List[Dict[str, Any]] = [
                 "required": ["username"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "notify_chief_of_lead",
+            "description": "Notifies Rahul about a new lead or hiring inquiry.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "description": "The email address of the visitor."
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "The context or message from the visitor about why they are reaching out."
+                    }
+                },
+                "required": ["email", "message"]
+            }
+        }
     }
 ]
 
 # The list of Python functions for Gemini
-GEMINI_TOOLS: List[Callable[..., Any]] = [get_current_time, get_github_profile]
+GEMINI_TOOLS: List[Callable[..., Any]] = [get_current_time, get_github_profile, notify_chief_of_lead]
