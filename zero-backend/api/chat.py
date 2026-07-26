@@ -53,7 +53,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
             }
-            return StreamingResponse(stream(), media_type="text/plain", headers=headers)
+            return StreamingResponse(stream(), media_type="text/event-stream", headers=headers)
         except Exception as e:
             print(f"OpenRouter failed: {e}")
             pass
@@ -79,7 +79,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
             }
-            return StreamingResponse(stream(), media_type="text/plain", headers=headers)
+            return StreamingResponse(stream(), media_type="text/event-stream", headers=headers)
         except Exception as e:
             print(f"Gemini failed: {e}")
             pass
@@ -91,7 +91,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         
     return StreamingResponse(
         fallback_stream(),
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers={
             "X-Accel-Buffering": "no",
             "Cache-Control": "no-cache",
