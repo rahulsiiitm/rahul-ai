@@ -64,10 +64,10 @@ async def gemini_generator(messages_data: List[Message]) -> AsyncGenerator[str, 
             formatted_messages.append(types.Content(role="model", parts=[types.Part.from_function_call(name=func_name or "", args=args_dict)]))
             formatted_messages.append(types.Content(role="user", parts=[types.Part.from_function_response(name=func_name or "", response={"result": result})]))
 
-async def xai_generator(messages_data: List[Message]) -> AsyncGenerator[str, None]:
+async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[str, None]:
     client = AsyncOpenAI(
-        base_url="https://api.x.ai/v1",
-        api_key=os.environ.get("GROQ_API_KEY", ""),
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.environ.get("OPENROUTER_API_KEY", ""),
         max_retries=0
     )
     
@@ -83,7 +83,7 @@ async def xai_generator(messages_data: List[Message]) -> AsyncGenerator[str, Non
 
     while True:
         response = cast(Any, await client.chat.completions.create(
-            model="grok-beta",
+            model="openrouter/auto",
             messages=formatted_messages, # type: ignore
             stream=True,
             max_tokens=2048,

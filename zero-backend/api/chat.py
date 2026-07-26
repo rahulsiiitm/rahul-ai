@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from core.security import is_rate_limited
 from models.schemas import ChatRequest
-from services.ai import gemini_generator, xai_generator
+from services.ai import gemini_generator, openrouter_generator
 
 router = APIRouter()
 
@@ -58,12 +58,12 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             print(f"Gemini failed: {e}")
             pass
             
-    # Fallback to xAI
-    if os.environ.get("GROQ_API_KEY"):
+    # Fallback to OpenRouter
+    if os.environ.get("OPENROUTER_API_KEY"):
         try:
-            generator = xai_generator(messages)
+            generator = openrouter_generator(messages)
             try:
-                first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=2.0)
+                first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=15.0)
             except StopAsyncIteration:
                 first_chunk = ""
                 
