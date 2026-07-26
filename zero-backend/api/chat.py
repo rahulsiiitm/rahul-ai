@@ -85,6 +85,8 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             pass
             
     async def fallback_stream() -> AsyncGenerator[str, None]:
+        if is_cold_start:
+            yield "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
         yield '🏎️ "Zero left the pit..."\n\nIf you are seeing this msg then probably my free api credits are gone please try again later hehehe'
         
     return StreamingResponse(
