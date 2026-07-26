@@ -37,7 +37,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         try:
             generator = openrouter_generator(messages)
             try:
-                first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=15.0)
+                first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=30.0)
             except StopAsyncIteration:
                 first_chunk = ""
                 
