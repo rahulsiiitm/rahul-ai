@@ -1,4 +1,5 @@
 import json
+import asyncio
 import os
 from typing import Any, AsyncGenerator, Dict, List, cast
 
@@ -108,6 +109,7 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
                     if tc.function and tc.function.arguments:
                         tool_calls_accumulator[tc.index]["function"]["arguments"] += tc.function.arguments
             elif delta.content:
+                await asyncio.sleep(0.02)
                 yield delta.content
                 
         if not tool_calls_accumulator:
