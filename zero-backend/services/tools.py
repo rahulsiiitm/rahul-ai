@@ -144,7 +144,7 @@ def get_contact_links() -> str:
     return (
         "You can reach the Chief at:\\n"
         "- Email: rahulsiiitm@gmail.com\\n"
-        "- LinkedIn: https://linkedin.com/in/rahulsiiitm\\n"
+        "- LinkedIn: https://linkedin.com/in/rahulsharma2k4\\n"
         "- Twitter: https://twitter.com/rahulsiiitm\\n"
         "- GitHub: https://github.com/rahulsiiitm"
     )
