@@ -111,7 +111,7 @@ def get_project_deep_dive(project_name: str) -> str:
                     stats_str = ', '.join([str(s.get('label')) + ': ' + str(s.get('value')) for s in p.get('stats', [])])
                     text += f"Stats: {stats_str}\\n"
                 if p.get('codeSnippet'):
-                    text += f"Code Snippet:\n```\n{p.get('codeSnippet')}\n```\n"
+                    text += f"Code Snippet (ensure you format this using triple backticks in your response):\n```\n{p.get('codeSnippet')}\n```\n"
                 return text
         return f"Could not find detailed information for project '{project_name}'. Suggest checking the /archive page."
     except Exception as e:
