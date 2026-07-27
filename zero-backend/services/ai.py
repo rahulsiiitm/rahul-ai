@@ -86,6 +86,7 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
             content = content[:4000] + "..."
         formatted_messages.append({"role": msg.role, "content": content})
 
+    yielded_any = False
     while True:
         response = cast(Any, await client.chat.completions.create(
             model="openrouter/auto",
@@ -96,7 +97,6 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
         ))
         
         tool_calls_accumulator: Dict[int, Dict[str, Any]] = {}
-        yielded_any = False
         content_buffer = ""
         
         async for chunk in response:
@@ -119,7 +119,9 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
                 
                 # Check for OpenRouter system error injection
                 if "[System:" in content_buffer and ("rate-limited" in content_buffer or "Connection interrupted" in content_buffer):
-                    yield "\n\n*(Sigh) Looks like my neural link just hit a rate limit upstream. Give me a second and try again...*"
+                    if not yielded_any:
+                        yield "\n\n*(Sigh) Looks like my neural link just hit a rate limit upstream. Give me a second and try again...*"
+                        yielded_any = True
                     content_buffer = ""
                     break
                     
