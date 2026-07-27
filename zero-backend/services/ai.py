@@ -97,6 +97,7 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
         
         tool_calls_accumulator: Dict[int, Dict[str, Any]] = {}
         yielded_any = False
+        content_buffer = ""
         
         async for chunk in response:
             if not chunk.choices:
@@ -114,10 +115,29 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
                     if tc.function and tc.function.arguments:
                         tool_calls_accumulator[tc.index]["function"]["arguments"] += tc.function.arguments
             elif delta.content:
-                yielded_any = True
-                await asyncio.sleep(0.02)
-                yield delta.content
+                content_buffer += delta.content
                 
+                # Check for OpenRouter system error injection
+                if "[System:" in content_buffer and ("rate-limited" in content_buffer or "Connection interrupted" in content_buffer):
+                    yield "\n\n*(Sigh) Looks like my neural link just hit a rate limit upstream. Give me a second and try again...*"
+                    content_buffer = ""
+                    break
+                    
+                # If we see "[System:" recently, delay yielding up to 150 chars to see if it's a rate limit error
+                if "[System:" in content_buffer and len(content_buffer) - content_buffer.rfind("[System:") < 150:
+                    continue
+                    
+                # Yield everything we have buffered, then clear the buffer
+                if content_buffer:
+                    yielded_any = True
+                    await asyncio.sleep(0.02)
+                    yield content_buffer
+                    content_buffer = ""
+                
+        if content_buffer:
+            yielded_any = True
+            yield content_buffer
+            
         if not tool_calls_accumulator:
             if not yielded_any:
                 yield "I'm having a little trouble processing that. Can you rephrase?"
