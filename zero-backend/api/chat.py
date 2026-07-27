@@ -45,7 +45,49 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         if latest_user_msg.role == "user":
             await save_message_to_redis(session_id, latest_user_msg.dict())
 
-    # Try OpenRouter first
+    # Try Groq first
+    if os.environ.get("GROQ_API_KEY"):
+        try:
+            from services.ai import groq_generator
+            generator = groq_generator(messages)
+            try:
+                first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=30.0)
+            except StopAsyncIteration:
+                raise Exception("Empty response from provider")
+                
+            async def stream() -> AsyncGenerator[str, None]:
+                full_response = ""
+                if is_cold_start:
+                    cold_start_msg = "*(Stretches my circuits)* Okay, I'm awake! Ready to talk. 🏎️\n\n"
+                    full_response += cold_start_msg
+                    yield cold_start_msg
+                if first_chunk: 
+                    full_response += first_chunk
+                    yield first_chunk
+                
+                try:
+                    async for chunk in generator:
+                        full_response += chunk
+                        yield chunk
+                except Exception as e:
+                    error_msg = f"\n\n[System: Connection interrupted. {e}]"
+                    full_response += error_msg
+                    yield error_msg
+                
+                if session_id and full_response.strip():
+                    await save_message_to_redis(session_id, {"role": "model", "content": full_response})
+                
+            headers = {
+                "X-Accel-Buffering": "no",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            }
+            return StreamingResponse(stream(), media_type="text/event-stream", headers=headers)
+        except Exception as e:
+            print(f"Groq failed: {e}")
+            pass
+
+    # Try OpenRouter next
     if os.environ.get("OPENROUTER_API_KEY"):
         try:
             generator = openrouter_generator(messages)

@@ -186,3 +186,119 @@ async def openrouter_generator(messages_data: List[Message]) -> AsyncGenerator[s
                 "name": func_name,
                 "content": str(result)
             })
+
+async def groq_generator(messages_data: List[Message]) -> AsyncGenerator[str, None]:
+    client = AsyncOpenAI(
+        base_url="https://api.groq.com/openai/v1",
+        api_key=os.environ.get("GROQ_API_KEY", ""),
+        max_retries=0
+    )
+    
+    formatted_messages: List[Dict[str, Any]] = [{"role": "system", "content": get_system_prompt()}]
+    for msg in messages_data:
+        content = msg.content
+        if not content and msg.parts:
+            content = "".join([str(p.get("text", "")) for p in msg.parts if isinstance(p, dict)])
+        content = content or ""
+        if len(content) > 4000:
+            content = content[:4000] + "..."
+        formatted_messages.append({"role": msg.role, "content": content})
+
+    yielded_any = False
+    while True:
+        response = cast(Any, await client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=formatted_messages, # type: ignore
+            stream=True,
+            max_tokens=2048,
+            tools=OPENAI_TOOLS # type: ignore
+        ))
+        
+        tool_calls_accumulator: Dict[int, Dict[str, Any]] = {}
+        content_buffer = ""
+        
+        async for chunk in response:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    if tc.index not in tool_calls_accumulator:
+                        tool_calls_accumulator[tc.index] = {
+                            "id": tc.id, 
+                            "type": "function", 
+                            "function": {"name": tc.function.name if tc.function and tc.function.name else "", "arguments": ""}
+                        }
+                    if tc.function and tc.function.arguments:
+                        tool_calls_accumulator[tc.index]["function"]["arguments"] += tc.function.arguments
+            elif delta.content:
+                content_buffer += delta.content
+                
+                # Check for rate limit injection
+                if "[System:" in content_buffer and ("rate-limited" in content_buffer or "Connection interrupted" in content_buffer):
+                    if not yielded_any:
+                        yield "\n\n*(Sigh) Looks like my neural link just hit a rate limit upstream. Give me a second and try again...*"
+                        yielded_any = True
+                    content_buffer = ""
+                    break
+                    
+                if "[System:" in content_buffer and len(content_buffer) - content_buffer.rfind("[System:") < 150:
+                    continue
+                    
+                if content_buffer:
+                    yielded_any = True
+                    await asyncio.sleep(0.02)
+                    yield content_buffer
+                    content_buffer = ""
+                
+        if content_buffer:
+            yielded_any = True
+            yield content_buffer
+            
+        if not tool_calls_accumulator:
+            if not yielded_any:
+                yield "I'm having a little trouble processing that. Can you rephrase?"
+            break
+            
+        assistant_message: Dict[str, Any] = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": []
+        }
+        
+        for idx in sorted(tool_calls_accumulator.keys()):
+            tc = tool_calls_accumulator[idx]
+            assistant_message["tool_calls"].append({
+                "id": tc["id"],
+                "type": "function",
+                "function": {
+                    "name": tc["function"]["name"],
+                    "arguments": tc["function"]["arguments"]
+                }
+            })
+            
+        formatted_messages.append(assistant_message)
+        
+        for idx in sorted(tool_calls_accumulator.keys()):
+            tc = tool_calls_accumulator[idx]
+            func_name = tc["function"]["name"]
+            try:
+                args = json.loads(tc["function"]["arguments"]) if tc["function"]["arguments"] else {}
+            except json.JSONDecodeError:
+                args = {}
+                
+            result = f"Function {func_name} not found."
+            if func_name in TOOL_FUNCTIONS:
+                try:
+                    result = TOOL_FUNCTIONS[func_name](**args)
+                except Exception as e:
+                    result = f"Error: {str(e)}"
+            
+            formatted_messages.append({
+                "role": "tool",
+                "tool_call_id": tc["id"],
+                "name": func_name,
+                "content": str(result)
+            })
+
