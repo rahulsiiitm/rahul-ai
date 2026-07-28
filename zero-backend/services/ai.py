@@ -207,7 +207,7 @@ async def groq_generator(messages_data: List[Message]) -> AsyncGenerator[str, No
     yielded_any = False
     while True:
         response = cast(Any, await client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             messages=formatted_messages, # type: ignore
             stream=True,
             max_tokens=2048,
