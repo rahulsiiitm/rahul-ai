@@ -50,6 +50,46 @@ create index if not exists zero_events_session_idx on public.zero_events (sessio
 create index if not exists zero_events_type_idx on public.zero_events (event_type, created_at desc);
 create index if not exists zero_leads_created_idx on public.zero_leads (created_at desc);
 
+-- One backend-only RPC keeps session counters and activity timestamps accurate.
+create or replace function public.touch_zero_session(
+    p_session_id text,
+    p_visitor_hash text default null,
+    p_user_agent text default null,
+    p_referrer text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    insert into public.zero_sessions (
+        session_id,
+        visitor_hash,
+        user_agent,
+        referrer,
+        message_count
+    )
+    values (
+        p_session_id,
+        p_visitor_hash,
+        p_user_agent,
+        p_referrer,
+        1
+    )
+    on conflict (session_id) do update
+    set
+        last_active_at = now(),
+        message_count = public.zero_sessions.message_count + 1,
+        visitor_hash = coalesce(public.zero_sessions.visitor_hash, excluded.visitor_hash),
+        user_agent = coalesce(excluded.user_agent, public.zero_sessions.user_agent),
+        referrer = coalesce(excluded.referrer, public.zero_sessions.referrer);
+end;
+$$;
+
+revoke all on function public.touch_zero_session(text, text, text, text) from public, anon, authenticated;
+grant execute on function public.touch_zero_session(text, text, text, text) to service_role;
+
 alter table public.zero_sessions enable row level security;
 alter table public.zero_messages enable row level security;
 alter table public.zero_events enable row level security;
@@ -66,7 +106,7 @@ grant select on public.zero_events to authenticated;
 grant select on public.zero_leads to authenticated;
 
 -- The dashboard user will receive app_metadata.role = 'zero_admin'.
--- raw app metadata is appropriate for authorization because end users cannot edit it themselves.
+-- Supabase recommends app metadata, rather than user-editable metadata, for authorization data.
 create policy "zero_admin_read_sessions"
     on public.zero_sessions for select
     to authenticated
