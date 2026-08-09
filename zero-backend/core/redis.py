@@ -1,69 +1,79 @@
-import os
 import json
+import os
+from typing import List
+
 import httpx
-from typing import List, Dict, Any
+
 from models.schemas import Message
 
-async def save_message_to_redis(session_id: str, message: dict):
+
+def _redis_config():
     url = os.environ.get("UPSTASH_REDIS_REST_URL")
     token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
-    
     if not url or not token:
+        return None
+    return url.strip('"').strip("'"), token.strip('"').strip("'")
+
+
+async def save_message_to_redis(session_id: str, message: dict) -> None:
+    config = _redis_config()
+    if not config:
         print("[REDIS] Missing credentials, skipping save.")
         return
-        
-    url = url.strip('"').strip("'")
-    token = token.strip('"').strip("'")
-    
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
+
+    url, token = config
+    headers = {"Authorization": f"Bearer {token}"}
     key = f"chat:{session_id}"
-    
+
     try:
         async with httpx.AsyncClient() as client:
-            # RPUSH to list
             msg_str = json.dumps(message)
-            r = await client.post(f"{url}/rpush/{key}", headers=headers, json=msg_str, timeout=5.0)
-            
-            # Set TTL to 24 hours (86400 seconds)
+            await client.post(f"{url}/rpush/{key}", headers=headers, json=msg_str, timeout=5.0)
             await client.post(f"{url}/expire/{key}/86400", headers=headers, timeout=5.0)
-    except Exception as e:
-        print(f"[REDIS Error] Failed to save message: {e}")
+    except Exception as exc:
+        print(f"[REDIS Error] Failed to save message: {exc}")
+
 
 async def get_chat_history(session_id: str) -> List[Message]:
-    url = os.environ.get("UPSTASH_REDIS_REST_URL")
-    token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
-    
-    if not url or not token:
+    config = _redis_config()
+    if not config:
         return []
-        
-    url = url.strip('"').strip("'")
-    token = token.strip('"').strip("'")
-    
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
+
+    url, token = config
+    headers = {"Authorization": f"Bearer {token}"}
     key = f"chat:{session_id}"
-    
+
     try:
         async with httpx.AsyncClient() as client:
-            # LRANGE key 0 -1 to get all elements
-            r = await client.get(f"{url}/lrange/{key}/0/-1", headers=headers, timeout=5.0)
-            if r.status_code == 200:
-                data = r.json()
-                if data.get("result"):
-                    history = []
-                    for item_str in data["result"]:
-                        try:
-                            item = json.loads(item_str)
-                            history.append(Message(**item))
-                        except Exception:
-                            continue
-                    return history
-    except Exception as e:
-        print(f"[REDIS Error] Failed to fetch history: {e}")
-        
+            response = await client.get(f"{url}/lrange/{key}/0/-1", headers=headers, timeout=5.0)
+            if response.status_code == 200:
+                data = response.json()
+                history: List[Message] = []
+                for item_str in data.get("result") or []:
+                    try:
+                        history.append(Message(**json.loads(item_str)))
+                    except Exception:
+                        continue
+                return history
+    except Exception as exc:
+        print(f"[REDIS Error] Failed to fetch history: {exc}")
+
     return []
+
+
+async def delete_chat_history(session_id: str) -> bool:
+    config = _redis_config()
+    if not config:
+        return True
+
+    url, token = config
+    headers = {"Authorization": f"Bearer {token}"}
+    key = f"chat:{session_id}"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{url}/del/{key}", headers=headers, timeout=5.0)
+            return response.status_code == 200
+    except Exception as exc:
+        print(f"[REDIS Error] Failed to delete history: {exc}")
+        return False
