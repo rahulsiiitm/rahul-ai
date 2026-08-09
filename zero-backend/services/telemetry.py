@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Coroutine, Dict, Optional
 
 import httpx
 
@@ -30,24 +30,26 @@ def hash_visitor(value: str) -> Optional[str]:
     ).hexdigest()
 
 
-async def _post(table: str, payload: Dict[str, Any], *, prefer: str = "return=minimal") -> None:
+def _headers(service_key: str) -> Dict[str, str]:
+    return {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+
+
+async def _post(table: str, payload: Dict[str, Any]) -> None:
     config = _config()
     if not config:
         return
 
     base_url, service_key = config
-    headers = {
-        "apikey": service_key,
-        "Authorization": f"Bearer {service_key}",
-        "Content-Type": "application/json",
-        "Prefer": prefer,
-    }
-
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(
                 f"{base_url}/rest/v1/{table}",
-                headers=headers,
+                headers=_headers(service_key),
                 json=payload,
             )
             if response.status_code >= 400:
@@ -56,8 +58,27 @@ async def _post(table: str, payload: Dict[str, Any], *, prefer: str = "return=mi
         print(f"[TELEMETRY] {table} write failed: {exc}")
 
 
-def schedule(coro) -> None:
-    async def safe_run():
+async def _rpc(function_name: str, payload: Dict[str, Any]) -> None:
+    config = _config()
+    if not config:
+        return
+
+    base_url, service_key = config
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                f"{base_url}/rest/v1/rpc/{function_name}",
+                headers=_headers(service_key),
+                json=payload,
+            )
+            if response.status_code >= 400:
+                print(f"[TELEMETRY] RPC {function_name} failed: {response.status_code} {response.text[:200]}")
+    except Exception as exc:
+        print(f"[TELEMETRY] RPC {function_name} failed: {exc}")
+
+
+def schedule(coro: Coroutine[Any, Any, Any]) -> None:
+    async def safe_run() -> None:
         try:
             await coro
         except Exception as exc:
@@ -66,52 +87,25 @@ def schedule(coro) -> None:
     try:
         asyncio.create_task(safe_run())
     except RuntimeError:
-        # No active event loop. Telemetry must never break the application.
-        pass
+        coro.close()
 
 
-async def upsert_session(
+async def touch_session(
     session_id: str,
     *,
     visitor_hash: Optional[str] = None,
     user_agent: Optional[str] = None,
     referrer: Optional[str] = None,
 ) -> None:
-    config = _config()
-    if not config:
-        return
-
-    base_url, service_key = config
-    headers = {
-        "apikey": service_key,
-        "Authorization": f"Bearer {service_key}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates,return=minimal",
-    }
-    payload = {
-        "session_id": session_id,
-        "visitor_hash": visitor_hash,
-        "user_agent": user_agent,
-        "referrer": referrer,
-        "last_active_at": "now()",
-    }
-
-    # PostgREST does not evaluate SQL expressions inside JSON, so omit the timestamp
-    # and let the database preserve/create timestamps. A lightweight RPC can replace
-    # this later if we want atomic counters and last_active updates in one call.
-    payload.pop("last_active_at")
-
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"{base_url}/rest/v1/zero_sessions?on_conflict=session_id",
-                headers=headers,
-                json=payload,
-            )
-            if response.status_code >= 400:
-                print(f"[TELEMETRY] session upsert failed: {response.status_code} {response.text[:200]}")
-    except Exception as exc:
-        print(f"[TELEMETRY] session upsert failed: {exc}")
+    await _rpc(
+        "touch_zero_session",
+        {
+            "p_session_id": session_id,
+            "p_visitor_hash": visitor_hash,
+            "p_user_agent": user_agent,
+            "p_referrer": referrer,
+        },
+    )
 
 
 async def log_message(
