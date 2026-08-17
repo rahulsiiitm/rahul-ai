@@ -11,6 +11,7 @@ Note: Two-call tool flow is necessary because Ollama needs a fresh message
 """
 
 import re
+import threading
 import ollama
 from config import OLLAMA_MODEL, OLLAMA_NUM_GPU
 
@@ -29,6 +30,7 @@ class ZeroBrain:
         self.model      = OLLAMA_MODEL
         self.history    = []
         self.dispatcher = dispatcher
+        self._turn_lock = threading.Lock()
 
     def set_dispatcher(self, dispatcher):
         self.dispatcher = dispatcher
@@ -45,7 +47,12 @@ class ZeroBrain:
           3. Stream narration tokens
         Otherwise: stream buffered tokens directly.
         """
-        self.history.append({"role": "user", "content": prompt})
+        with self._turn_lock:
+            yield from self._generate_turn(prompt)
+
+    def _generate_turn(self, prompt: str):
+        self.history.append({"role": "user", "content": prompt[:4000]})
+        self._trim_history()
 
         # ── Step 1: get ZERO's first response ─────────────────────────────────
         full_reply, error = self._collect(self.history)
@@ -89,6 +96,17 @@ class ZeroBrain:
             for char in full_reply:
                 yield char
             self.history.append({"role": "assistant", "content": full_reply})
+
+    def _trim_history(self, max_chars: int = 6000) -> None:
+        kept = []
+        total = 0
+        for message in reversed(self.history):
+            content = str(message.get("content", ""))
+            if kept and total + len(content) > max_chars:
+                break
+            kept.append(message)
+            total += len(content)
+        self.history = list(reversed(kept))
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 

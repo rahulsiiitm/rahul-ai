@@ -2,9 +2,11 @@ import asyncio
 import hashlib
 import hmac
 import os
-from typing import Any, Coroutine, Dict, Optional
+from typing import Any, Coroutine, Dict, Optional, Set
 
 import httpx
+
+_background_tasks: Set[asyncio.Task[Any]] = set()
 
 
 def _config() -> Optional[tuple[str, str]]:
@@ -85,9 +87,16 @@ def schedule(coro: Coroutine[Any, Any, Any]) -> None:
             print(f"[TELEMETRY] background task failed: {exc}")
 
     try:
-        asyncio.create_task(safe_run())
+        task = asyncio.create_task(safe_run())
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     except RuntimeError:
         coro.close()
+
+
+async def drain_telemetry() -> None:
+    if _background_tasks:
+        await asyncio.gather(*tuple(_background_tasks), return_exceptions=True)
 
 
 async def touch_session(

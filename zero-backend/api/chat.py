@@ -1,16 +1,21 @@
 import asyncio
 import os
 import time
-from typing import AsyncGenerator, Callable, Optional, Tuple
+from typing import AsyncGenerator, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from core.config import TRUST_PROXY_HEADERS
-from core.redis import delete_chat_history, get_chat_history, save_message_to_redis
+from core.redis import get_chat_history, save_message_to_redis
 from core.security import is_rate_limited
+from core.session_auth import (
+    SessionConfigurationError,
+    create_session_credentials,
+    verify_session_token,
+)
 from models.schemas import ChatRequest, Message
-from services.ai import gemini_generator, groq_generator, openrouter_generator
+from services.ai import PROVIDER_SPECS, ProviderFactory
 from services.telemetry import hash_visitor, log_event, log_message, schedule, touch_session
 
 router = APIRouter()
@@ -18,10 +23,7 @@ router = APIRouter()
 STREAM_HEADERS = {
     "X-Accel-Buffering": "no",
     "Cache-Control": "no-cache",
-    "Connection": "keep-alive",
 }
-
-ProviderFactory = Callable[[list[Message]], AsyncGenerator[str, None]]
 
 
 def _client_ip(request: Request) -> str:
@@ -44,6 +46,25 @@ def _message_text(message: Message) -> str:
     return ""
 
 
+def _require_session_access(request: Request, session_id: str) -> None:
+    token = request.headers.get("x-session-token", "")
+    try:
+        valid = verify_session_token(session_id, token)
+    except SessionConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="Chat sessions are not configured.") from exc
+    if not valid:
+        raise HTTPException(status_code=401, detail="Invalid or expired chat session.")
+
+
+async def _close_generator(generator: AsyncGenerator[str, None] | None) -> None:
+    if generator is None:
+        return
+    try:
+        await generator.aclose()
+    except Exception:
+        pass
+
+
 async def _create_provider_stream(
     provider_name: str,
     model_name: str,
@@ -53,6 +74,7 @@ async def _create_provider_stream(
     session_id: Optional[str],
 ) -> Optional[StreamingResponse]:
     started_at = time.perf_counter()
+    generator: AsyncGenerator[str, None] | None = None
     schedule(
         log_event(
             "provider_attempt",
@@ -63,9 +85,10 @@ async def _create_provider_stream(
     )
 
     try:
-        generator = factory(messages)
+        generator = factory(messages, session_id)
         first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=timeout_seconds)
     except StopAsyncIteration:
+        await _close_generator(generator)
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
         print(f"[{provider_name}] Empty response")
         schedule(
@@ -80,8 +103,9 @@ async def _create_provider_stream(
         )
         return None
     except Exception as exc:
+        await _close_generator(generator)
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-        print(f"[{provider_name}] Failed before streaming: {exc}")
+        print(f"[{provider_name}] Failed before streaming: {type(exc).__name__}")
         schedule(
             log_event(
                 "provider_failure",
@@ -119,7 +143,7 @@ async def _create_provider_stream(
                 yield chunk
         except Exception as exc:
             status = "interrupted"
-            print(f"[{provider_name}] Streaming interrupted: {exc}")
+            print(f"[{provider_name}] Streaming interrupted: {type(exc).__name__}")
             safe_error = "\n\nZero lost the upstream connection. Try that again."
             full_response += safe_error
             yield safe_error
@@ -133,12 +157,14 @@ async def _create_provider_stream(
                     metadata={"reason": type(exc).__name__},
                 )
             )
+        finally:
+            await _close_generator(generator)
 
         total_latency_ms = int((time.perf_counter() - started_at) * 1000)
         if session_id and full_response.strip():
             await save_message_to_redis(
                 session_id,
-                {"role": "model", "content": full_response},
+                {"role": "assistant", "content": full_response},
             )
             schedule(touch_session(session_id))
             schedule(
@@ -163,22 +189,33 @@ async def _create_provider_stream(
                 )
             )
 
-    return StreamingResponse(stream(), media_type="text/event-stream", headers=STREAM_HEADERS)
+    return StreamingResponse(stream(), media_type="text/plain", headers=STREAM_HEADERS)
+
+
+@router.post("/chat/session")
+async def create_chat_session(response: Response) -> dict[str, str | int]:
+    try:
+        credentials = create_session_credentials()
+    except SessionConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="Chat sessions are not configured.") from exc
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "session_id": credentials.session_id,
+        "session_token": credentials.token,
+        "expires_at": credentials.expires_at,
+    }
 
 
 @router.get("/chat/history/{session_id}")
-async def get_history(session_id: str):
+async def get_history(
+    request: Request,
+    response: Response,
+    session_id: str,
+) -> dict[str, list[Message]]:
+    _require_session_access(request, session_id)
     history = await get_chat_history(session_id)
+    response.headers["Cache-Control"] = "no-store"
     return {"messages": history}
-
-
-@router.delete("/chat/history/{session_id}")
-async def clear_history(session_id: str):
-    deleted = await delete_chat_history(session_id)
-    if not deleted:
-        raise HTTPException(status_code=503, detail="Could not clear conversation history.")
-    schedule(log_event("history_cleared", session_id=session_id))
-    return {"status": "cleared"}
 
 
 @router.post("/chat")
@@ -190,9 +227,11 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         schedule(log_event("rate_limited", session_id=session_id))
         raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
 
+    _require_session_access(request, session_id)
+
     messages = body.messages[-10:]
 
-    if session_id and messages:
+    if messages:
         latest_user_msg = messages[-1]
         if latest_user_msg.role == "user":
             user_text = _message_text(latest_user_msg)
@@ -208,13 +247,12 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             if user_text:
                 schedule(log_message(session_id, "user", user_text))
 
-    providers: list[Tuple[str, str, Optional[str], ProviderFactory, float]] = [
-        ("Groq", "llama-3.3-70b-versatile", os.environ.get("GROQ_API_KEY"), groq_generator, 30.0),
-        ("OpenRouter", "openrouter/auto", os.environ.get("OPENROUTER_API_KEY"), openrouter_generator, 30.0),
-        ("Gemini", "gemini-2.0-flash", os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY"), gemini_generator, 5.0),
-    ]
-
-    for provider_name, model_name, api_key, factory, timeout_seconds in providers:
+    for provider in PROVIDER_SPECS:
+        provider_name = provider.name
+        model_name = provider.model
+        factory = provider.factory
+        timeout_seconds = provider.first_token_timeout
+        api_key = os.environ.get(provider.api_key_env)
         if not api_key:
             continue
         response = await _create_provider_stream(
@@ -237,7 +275,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
         if session_id:
             await save_message_to_redis(
                 session_id,
-                {"role": "model", "content": fallback_msg},
+                {"role": "assistant", "content": fallback_msg},
             )
             schedule(touch_session(session_id))
             schedule(
@@ -252,6 +290,6 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
 
     return StreamingResponse(
         fallback_stream(),
-        media_type="text/event-stream",
+        media_type="text/plain",
         headers=STREAM_HEADERS,
     )

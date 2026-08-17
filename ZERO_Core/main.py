@@ -13,7 +13,6 @@ import sys
 
 from engine.brain      import ZeroBrain
 from engine.dispatcher import ZeroDispatcher
-from tools.job_tracker import JobTracker
 
 
 def boot_terminal_fallback(brain: ZeroBrain):
@@ -56,11 +55,10 @@ def main():
     # ── 3. TUI ─────────────────────────────────────────────────────────────────
     try:
         from ui.app import ZeroApp
-        jobs_db = JobTracker()
         app = ZeroApp(
             brain=brain,
             dispatcher=dispatcher,
-            jobs=jobs_db,
+            jobs=dispatcher.jobs,
         )
         app.run()
 
