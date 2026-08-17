@@ -15,7 +15,7 @@ async def keep_alive_endpoint() -> Dict[str, str]:
 async def readiness_endpoint() -> Dict[str, str]:
     provider_ready = any(
         os.environ.get(name)
-        for name in ("GROQ_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY")
+        for name in ("GROQ_API_KEY", "OPENROUTER_API_KEY")
     )
     session_secret = os.environ.get("CHAT_SESSION_SECRET") or os.environ.get("TELEMETRY_HASH_SALT", "")
     if not provider_ready or len(session_secret.strip().strip('"').strip("'")) < 32:

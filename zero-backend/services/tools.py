@@ -342,5 +342,3 @@ OPENAI_TOOLS: List[Dict[str, Any]] = [
     }
 ]
 
-# The list of Python functions for Gemini
-GEMINI_TOOLS: List[Callable[..., Any]] = [get_current_time, get_github_profile, get_latest_github_commits, notify_chief_of_lead, get_project_deep_dive, get_resume_link, search_web, get_contact_links]
