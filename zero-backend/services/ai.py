@@ -4,73 +4,14 @@ import os
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, cast
 
-from google import genai
-from google.genai import types
 from openai import AsyncOpenAI
 
 from models.schemas import Message
 from services.knowledge import get_system_prompt
-from services.tools import GEMINI_TOOLS, OPENAI_TOOLS, execute_tool
+from services.tools import OPENAI_TOOLS, execute_tool
 
 MAX_TOOL_ROUNDS = 4
 
-
-async def gemini_generator(
-    messages_data: List[Message],
-    session_id: Optional[str] = None,
-) -> AsyncGenerator[str, None]:
-    client = genai.Client(api_key=os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY", ""))
-    
-    formatted_messages: List[types.Content] = []
-    for msg in messages_data:
-        role = "user" if msg.role == "user" else "model"
-        content = msg.content
-        if not content and msg.parts:
-            content = "".join([str(p.get("text", "")) for p in msg.parts if isinstance(p, dict)])
-            
-        content = content or ""
-        if len(content) > 4000:
-            content = content[:4000] + "..."
-            
-        formatted_messages.append(types.Content(role=role, parts=[types.Part.from_text(text=content)]))
-
-    for _ in range(MAX_TOOL_ROUNDS):
-        response = await client.aio.models.generate_content_stream(
-            model='gemini-2.0-flash',
-            contents=formatted_messages,
-            config=types.GenerateContentConfig(
-                system_instruction=get_system_prompt(),
-                max_output_tokens=2048,
-                tools=cast(List[Any], GEMINI_TOOLS)
-            )
-        )
-        
-        function_calls = []
-        yielded_any = False
-        async for chunk in response:
-            if chunk.function_calls:
-                function_calls.extend(chunk.function_calls)
-            elif chunk.text:
-                yielded_any = True
-                yield chunk.text
-                
-        if not function_calls:
-            if not yielded_any:
-                yield "I'm having a little trouble processing that. Can you rephrase?"
-            break
-            
-        # Execute tools and append to history
-        for fc in function_calls:
-            func_name = fc.name
-            args = fc.args if hasattr(fc, 'args') and fc.args else {}
-            args_dict = dict(args) if isinstance(args, dict) else {}
-            
-            result = await execute_tool(func_name or "", args_dict, session_id=session_id)
-                    
-            formatted_messages.append(types.Content(role="model", parts=[types.Part.from_function_call(name=func_name or "", args=args_dict)]))
-            formatted_messages.append(types.Content(role="user", parts=[types.Part.from_function_response(name=func_name or "", response={"result": result})]))
-    else:
-        yield "I stopped a repeated tool loop before it could waste more time. Try a narrower request."
 
 async def _openai_compatible_generator(
     messages_data: List[Message],
@@ -192,7 +133,7 @@ async def groq_generator(
         messages_data,
         base_url="https://api.groq.com/openai/v1",
         api_key_env="GROQ_API_KEY",
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         session_id=session_id,
     ):
         yield chunk
@@ -211,7 +152,6 @@ class ProviderSpec:
 
 
 PROVIDER_SPECS = (
-    ProviderSpec("Groq", "llama-3.3-70b-versatile", "GROQ_API_KEY", groq_generator, 30.0),
+    ProviderSpec("Groq", "openai/gpt-oss-120b", "GROQ_API_KEY", groq_generator, 30.0),
     ProviderSpec("OpenRouter", "openrouter/auto", "OPENROUTER_API_KEY", openrouter_generator, 30.0),
-    ProviderSpec("Gemini", "gemini-2.0-flash", "GOOGLE_GENERATIVE_AI_API_KEY", gemini_generator, 10.0),
 )
