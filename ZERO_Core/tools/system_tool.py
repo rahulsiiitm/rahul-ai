@@ -8,14 +8,12 @@ import shlex
 import psutil
 
 
-# Commands ZERO is allowed to execute (prefix allow-list for safety)
-_ALLOWED_PREFIXES = (
-    "ls", "df", "du", "free", "uname", "uptime", "who", "ps",
-    "top", "htop", "cat", "head", "tail", "grep", "find",
-    "git", "pip", "python", "nvidia-smi", "lscpu", "lsblk",
-    "systemctl status", "journalctl", "ping", "curl", "wget",
-    "echo", "date", "pwd", "hostname",
-)
+# Read-only diagnostics only. Never expose interpreters, package managers,
+# network clients, or source-control mutation commands to model output.
+_ALLOWED_COMMANDS = {
+    "date", "df", "du", "free", "hostname", "ls", "lscpu", "lsblk",
+    "nvidia-smi", "ps", "pwd", "uname", "uptime", "who",
+}
 
 
 class SystemTool:
@@ -45,16 +43,19 @@ class SystemTool:
         if not cmd:
             return "[System] No command provided."
 
-        # Safety check — only allow white-listed command prefixes
-        if not any(cmd.startswith(p) for p in _ALLOWED_PREFIXES):
+        try:
+            arguments = shlex.split(cmd)
+        except ValueError:
+            return "[System] Command syntax is invalid."
+        if not arguments or arguments[0] not in _ALLOWED_COMMANDS:
             return (
-                f"[System] Command '{cmd.split()[0]}' is not on the allow-list. "
+                f"[System] Command '{arguments[0] if arguments else '?'}' is not on the allow-list. "
                 "Ask Rahul to add it if needed."
             )
 
         try:
             result = subprocess.run(
-                shlex.split(cmd),
+                arguments,
                 capture_output=True,
                 text=True,
                 timeout=15,
