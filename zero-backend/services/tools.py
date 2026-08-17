@@ -1,8 +1,15 @@
+import asyncio
+import inspect
+import os
+import re
 from datetime import datetime
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
-import os
+
+from services.telemetry import log_lead
+
+MAX_TOOL_ARGUMENT_CHARS = 1_000
 
 def get_current_time() -> str:
     """Returns the current date and time."""
@@ -14,6 +21,8 @@ def get_github_profile(username: str) -> str:
     Args:
         username: The GitHub username to look up.
     """
+    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", username):
+        return "Invalid GitHub username."
     try:
         headers = {}
         if os.environ.get("GITHUB_TOKEN"):
@@ -36,6 +45,8 @@ def get_latest_github_commits(username: str) -> str:
     Args:
         username: The GitHub username to look up.
     """
+    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", username):
+        return "Invalid GitHub username."
     try:
         headers = {}
         if os.environ.get("GITHUB_TOKEN"):
@@ -73,7 +84,12 @@ def notify_chief_of_lead(email: str, message: str) -> str:
         message: The context or message from the visitor about why they are reaching out.
     """
     webhook_url = os.environ.get("LEAD_WEBHOOK_URL")
-    print(f"[LEAD EXTRACTED] Email: {email} | Intent: {message}")
+    email = email.strip()
+    message = message.strip()[:MAX_TOOL_ARGUMENT_CHARS]
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) or len(email) > 254:
+        return "The visitor email address is invalid."
+    if not message:
+        return "A short message is required before notifying the Chief."
     
     if not webhook_url:
         return "Webhook URL not configured in backend, but lead was logged successfully to the server console."
@@ -109,9 +125,13 @@ def get_project_deep_dive(project_name: str) -> str:
                     text += f"Solution/Architecture: {p.get('solution')}\n"
                 if p.get('stats'):
                     stats_str = ', '.join([str(s.get('label')) + ': ' + str(s.get('value')) for s in p.get('stats', [])])
-                    text += f"Stats: {stats_str}\\n"
+                    text += f"Stats: {stats_str}\n"
                 if p.get('codeSnippet'):
                     text += f"Code Snippet (ensure you format this using triple backticks in your response):\n```\n{p.get('codeSnippet')}\n```\n"
+                links = p.get("links") or {}
+                for label in ("github", "demo", "pypi"):
+                    if links.get(label):
+                        text += f"{label.title()}: {links[label]}\n"
                 return text
         return f"Could not find detailed information for project '{project_name}'. Suggest checking the /archive page."
     except Exception as e:
@@ -127,6 +147,9 @@ def search_web(query: str) -> str:
     Args:
         query: The search query.
     """
+    query = query.strip()[:300]
+    if not query:
+        return "A search query is required."
     try:
         from duckduckgo_search import DDGS
         results = DDGS().text(query, max_results=3)
@@ -135,17 +158,17 @@ def search_web(query: str) -> str:
         formatted = []
         for r in results:
             formatted.append(f"- {r.get('title')}: {r.get('body')} ({r.get('href')})")
-        return "\\n".join(formatted)
+        return "\n".join(formatted)
     except Exception as e:
         return f"Error searching the web: {str(e)}"
 
 def get_contact_links() -> str:
     """Returns the Chief's contact links (Email, LinkedIn, Twitter). Use this when visitors ask how to reach out."""
     return (
-        "You can reach the Chief at:\\n"
-        "- Email: rahulsiiitm@gmail.com\\n"
-        "- LinkedIn: https://linkedin.com/in/rahulsharma2k4\\n"
-        "- Twitter: https://twitter.com/rahulsiiitm\\n"
+        "You can reach the Chief at:\n"
+        "- Email: rahulsiiitm@gmail.com\n"
+        "- LinkedIn: https://linkedin.com/in/rahulsharma2k4\n"
+        "- Twitter: https://twitter.com/rahulsiiitm\n"
         "- GitHub: https://github.com/rahulsiiitm"
     )
 
@@ -160,6 +183,35 @@ TOOL_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "search_web": search_web,
     "get_contact_links": get_contact_links,
 }
+
+
+async def execute_tool(
+    name: str,
+    arguments: Dict[str, Any],
+    *,
+    session_id: Optional[str] = None,
+) -> str:
+    function = TOOL_FUNCTIONS.get(name)
+    if function is None:
+        return f"Function {name} not found."
+
+    for value in arguments.values():
+        if isinstance(value, str) and len(value) > MAX_TOOL_ARGUMENT_CHARS:
+            return f"Tool argument exceeds the {MAX_TOOL_ARGUMENT_CHARS}-character limit."
+
+    try:
+        result = await asyncio.to_thread(function, **arguments)
+        if inspect.isawaitable(result):
+            result = await result
+    except Exception as exc:
+        return f"Tool failed: {type(exc).__name__}"
+
+    if name == "notify_chief_of_lead":
+        email = str(arguments.get("email", ""))[:254]
+        message = str(arguments.get("message", ""))[:MAX_TOOL_ARGUMENT_CHARS]
+        if re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) and message.strip():
+            await log_lead(session_id, email, message)
+    return str(result)
 
 # The schemas for OpenAI / xAI
 OPENAI_TOOLS: List[Dict[str, Any]] = [

@@ -1,79 +1,121 @@
 import json
 import os
-from typing import List
+from typing import Any, List, Sequence
 
 import httpx
 
 from models.schemas import Message
 
 
-def _redis_config():
+def _redis_config() -> tuple[str, str] | None:
     url = os.environ.get("UPSTASH_REDIS_REST_URL")
     token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
     if not url or not token:
         return None
-    return url.strip('"').strip("'"), token.strip('"').strip("'")
+    return url.strip('"').strip("'").rstrip("/"), token.strip('"').strip("'")
 
 
-async def save_message_to_redis(session_id: str, message: dict) -> None:
+async def _command(*arguments: Any) -> Any:
     config = _redis_config()
     if not config:
-        print("[REDIS] Missing credentials, skipping save.")
-        return
+        return None
 
     url, token = config
     headers = {"Authorization": f"Bearer {token}"}
-    key = f"chat:{session_id}"
-
-    try:
-        async with httpx.AsyncClient() as client:
-            msg_str = json.dumps(message)
-            await client.post(f"{url}/rpush/{key}", headers=headers, json=msg_str, timeout=5.0)
-            await client.post(f"{url}/expire/{key}/86400", headers=headers, timeout=5.0)
-    except Exception as exc:
-        print(f"[REDIS Error] Failed to save message: {exc}")
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.post(url, headers=headers, json=list(arguments))
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("error"):
+            raise RuntimeError(str(payload["error"]))
+        return payload.get("result")
 
 
-async def get_chat_history(session_id: str) -> List[Message]:
+async def _pipeline(commands: Sequence[Sequence[Any]]) -> list[dict[str, Any]]:
     config = _redis_config()
-    if not config:
+    if not config or not commands:
         return []
 
     url, token = config
     headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(f"{url}/pipeline", headers=headers, json=commands)
+        response.raise_for_status()
+        results = response.json()
+        if not isinstance(results, list):
+            raise RuntimeError("Unexpected Redis pipeline response.")
+        errors = [str(item["error"]) for item in results if isinstance(item, dict) and item.get("error")]
+        if errors:
+            raise RuntimeError("; ".join(errors))
+        return results
+
+
+async def save_message_to_redis(session_id: str, message: dict[str, Any]) -> None:
+    if not _redis_config():
+        return
+
     key = f"chat:{session_id}"
+    try:
+        await _pipeline(
+            [
+                ["RPUSH", key, json.dumps(message)],
+                ["EXPIRE", key, 86_400],
+            ]
+        )
+    except Exception as exc:
+        print(f"[REDIS] Failed to save message: {type(exc).__name__}")
+
+
+async def get_chat_history(session_id: str) -> List[Message]:
+    if not _redis_config():
+        return []
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{url}/lrange/{key}/0/-1", headers=headers, timeout=5.0)
-            if response.status_code == 200:
-                data = response.json()
-                history: List[Message] = []
-                for item_str in data.get("result") or []:
-                    try:
-                        history.append(Message(**json.loads(item_str)))
-                    except Exception:
-                        continue
-                return history
+        items = await _command("LRANGE", f"chat:{session_id}", 0, -1)
+        history: List[Message] = []
+        for item in items or []:
+            try:
+                payload = json.loads(item)
+                if payload.get("role") == "model":
+                    payload["role"] = "assistant"
+                history.append(Message(**payload))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return history
     except Exception as exc:
-        print(f"[REDIS Error] Failed to fetch history: {exc}")
-
-    return []
+        print(f"[REDIS] Failed to fetch history: {type(exc).__name__}")
+        return []
 
 
 async def delete_chat_history(session_id: str) -> bool:
-    config = _redis_config()
-    if not config:
-        return True
-
-    url, token = config
-    headers = {"Authorization": f"Bearer {token}"}
-    key = f"chat:{session_id}"
-
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{url}/del/{key}", headers=headers, timeout=5.0)
-            return response.status_code == 200
+        await delete_chat_histories([session_id])
+        return True
     except Exception as exc:
-        print(f"[REDIS Error] Failed to delete history: {exc}")
+        print(f"[REDIS] Failed to delete history: {type(exc).__name__}")
         return False
+
+
+async def delete_chat_histories(session_ids: Sequence[str]) -> int:
+    if not _redis_config() or not session_ids:
+        return 0
+    results = await _pipeline([["DEL", f"chat:{session_id}"] for session_id in session_ids])
+    return sum(int(item.get("result") or 0) for item in results)
+
+
+async def delete_all_chat_histories() -> int:
+    if not _redis_config():
+        return 0
+
+    cursor = "0"
+    deleted = 0
+    while True:
+        result = await _command("SCAN", cursor, "MATCH", "chat:*", "COUNT", 100)
+        if not isinstance(result, list) or len(result) != 2:
+            raise RuntimeError("Unexpected Redis SCAN response.")
+        cursor, keys = str(result[0]), result[1] or []
+        if keys:
+            pipeline_results = await _pipeline([["DEL", key] for key in keys])
+            deleted += sum(int(item.get("result") or 0) for item in pipeline_results)
+        if cursor == "0":
+            return deleted

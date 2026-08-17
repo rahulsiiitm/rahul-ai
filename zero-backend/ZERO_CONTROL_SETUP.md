@@ -30,9 +30,21 @@ Add these only to the ZERO backend deployment:
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 TELEMETRY_HASH_SALT=generate-a-long-random-secret
+CHAT_SESSION_SECRET=generate-a-different-long-random-secret
+ZERO_ADMIN_API_KEY=generate-another-long-random-secret
 ```
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY` through a `NEXT_PUBLIC_...` variable or browser bundle.
+`CHAT_SESSION_SECRET` signs public chat-session ownership tokens. `ZERO_ADMIN_API_KEY` protects the backend deletion API; both must contain at least 32 characters and must stay server-side.
+For backward-compatible rollout, the backend can temporarily fall back to `TELEMETRY_HASH_SALT` for session signing, but a dedicated `CHAT_SESSION_SECRET` is recommended.
+
+The deletion API accepts:
+
+- `DELETE /api/admin/chats/{session_id}` for one chat
+- `DELETE /api/admin/chats` with `{"session_ids":["..."]}` for selected chats
+- `DELETE /api/admin/chats` with `{"delete_all":true,"confirmation":"DELETE_ALL_CHATS"}` for all chats
+
+All deletion requests require the `X-Admin-Key` header and remove both Redis history and Supabase telemetry.
 
 `TELEMETRY_HASH_SALT` is used to HMAC client IP addresses into stable visitor hashes. Raw IP addresses are not stored.
 
