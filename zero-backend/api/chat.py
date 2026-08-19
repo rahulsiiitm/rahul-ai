@@ -20,6 +20,7 @@ from core.session_auth import (
 )
 from models.schemas import ChatRequest, Message
 from services.ai import PROVIDER_SPECS, ProviderFactory
+from services.local_fallback import build_local_fallback
 from services.telemetry import hash_visitor, log_event, log_message, schedule, touch_session
 
 router = APIRouter()
@@ -322,10 +323,7 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             return response
 
     async def fallback_stream() -> AsyncGenerator[str, None]:
-        fallback_msg = (
-            '🏎️ "Zero left the pit..."\n\n'
-            "My upstream providers are unavailable right now. Try again in a bit."
-        )
+        fallback_msg = build_local_fallback(messages)
         yield fallback_msg
         if session_id:
             await save_message_to_redis(
