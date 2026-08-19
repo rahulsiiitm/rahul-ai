@@ -11,6 +11,7 @@ from services.knowledge import get_system_prompt
 from services.tools import OPENAI_TOOLS, execute_tool
 
 MAX_TOOL_ROUNDS = 4
+GROQ_MODEL = "openai/gpt-oss-20b"
 
 
 async def _openai_compatible_generator(
@@ -133,7 +134,7 @@ async def groq_generator(
         messages_data,
         base_url="https://api.groq.com/openai/v1",
         api_key_env="GROQ_API_KEY",
-        model="openai/gpt-oss-120b",
+        model=GROQ_MODEL,
         session_id=session_id,
     ):
         yield chunk
@@ -152,6 +153,6 @@ class ProviderSpec:
 
 
 PROVIDER_SPECS = (
-    ProviderSpec("Groq", "openai/gpt-oss-120b", "GROQ_API_KEY", groq_generator, 12.0),
+    ProviderSpec("Groq", GROQ_MODEL, "GROQ_API_KEY", groq_generator, 12.0),
     ProviderSpec("OpenRouter", "openrouter/auto", "OPENROUTER_API_KEY", openrouter_generator, 12.0),
 )
