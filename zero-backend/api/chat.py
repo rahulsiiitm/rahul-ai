@@ -6,7 +6,11 @@ from typing import AsyncGenerator, Optional
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
-from core.config import TRUST_PROXY_HEADERS
+from core.config import (
+    PROVIDER_SELECTION_TIMEOUT_SECONDS,
+    PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS,
+    TRUST_PROXY_HEADERS,
+)
 from core.redis import get_chat_history, save_message_to_redis
 from core.security import is_rate_limited
 from core.session_auth import (
@@ -102,6 +106,24 @@ async def _create_provider_stream(
             )
         )
         return None
+    except asyncio.TimeoutError:
+        await _close_generator(generator)
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        print(f"[{provider_name}] First token timed out after {elapsed_ms}ms")
+        schedule(
+            log_event(
+                "provider_failure",
+                session_id=session_id,
+                provider=provider_name,
+                model=model_name,
+                latency_ms=elapsed_ms,
+                metadata={
+                    "reason": "first_token_timeout",
+                    "timeout_ms": int(timeout_seconds * 1000),
+                },
+            )
+        )
+        return None
     except Exception as exc:
         await _close_generator(generator)
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
@@ -138,9 +160,35 @@ async def _create_provider_stream(
             yield first_chunk
 
         try:
-            async for chunk in generator:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(
+                        generator.__anext__(),
+                        timeout=PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS,
+                    )
+                except StopAsyncIteration:
+                    break
                 full_response += chunk
                 yield chunk
+        except asyncio.TimeoutError:
+            status = "interrupted"
+            print(f"[{provider_name}] Stream stalled")
+            safe_error = "\n\nZero's upstream connection stalled. Try that again."
+            full_response += safe_error
+            yield safe_error
+            schedule(
+                log_event(
+                    "stream_interrupted",
+                    session_id=session_id,
+                    provider=provider_name,
+                    model=model_name,
+                    latency_ms=int((time.perf_counter() - started_at) * 1000),
+                    metadata={
+                        "reason": "stream_idle_timeout",
+                        "timeout_ms": int(PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS * 1000),
+                    },
+                )
+            )
         except Exception as exc:
             status = "interrupted"
             print(f"[{provider_name}] Streaming interrupted: {type(exc).__name__}")
@@ -247,14 +295,21 @@ async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingRespons
             if user_text:
                 schedule(log_message(session_id, "user", user_text))
 
+    selection_started_at = time.perf_counter()
     for provider in PROVIDER_SPECS:
         provider_name = provider.name
         model_name = provider.model
         factory = provider.factory
-        timeout_seconds = provider.first_token_timeout
         api_key = os.environ.get(provider.api_key_env)
         if not api_key:
             continue
+
+        elapsed_seconds = time.perf_counter() - selection_started_at
+        remaining_seconds = PROVIDER_SELECTION_TIMEOUT_SECONDS - elapsed_seconds
+        if remaining_seconds <= 0:
+            break
+        timeout_seconds = min(provider.first_token_timeout, remaining_seconds)
+
         response = await _create_provider_stream(
             provider_name,
             model_name,

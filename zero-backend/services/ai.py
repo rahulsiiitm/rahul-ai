@@ -152,6 +152,6 @@ class ProviderSpec:
 
 
 PROVIDER_SPECS = (
-    ProviderSpec("Groq", "openai/gpt-oss-120b", "GROQ_API_KEY", groq_generator, 30.0),
-    ProviderSpec("OpenRouter", "openrouter/auto", "OPENROUTER_API_KEY", openrouter_generator, 30.0),
+    ProviderSpec("Groq", "openai/gpt-oss-120b", "GROQ_API_KEY", groq_generator, 12.0),
+    ProviderSpec("OpenRouter", "openrouter/auto", "OPENROUTER_API_KEY", openrouter_generator, 12.0),
 )
