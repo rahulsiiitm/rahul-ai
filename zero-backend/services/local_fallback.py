@@ -28,9 +28,9 @@ def build_local_fallback(messages: list[Message]) -> str:
     identity_phrases = ("who are you", "who are u", "what are you", "what are u", "your name")
     if any(phrase in normalized for phrase in identity_phrases):
         return (
-            "I'm Zero — the Chief's AI co-pilot inside this portfolio. "
-            "I know his projects, experience, and technical stack. The external brain is "
-            "temporarily rate-limited, but the local one still works."
+            "I'm Zero — the Chief's AI co-pilot, resident smart-mouth, and occasional "
+            "voice of reason. I know the builds, the battle scars, and the technical stack. "
+            "The bigger brain is rate-limited; apparently even machines need a coffee break."
         )
 
     if any(word in text for word in ("who is rahul", "who is the chief", "about rahul", "about the chief")):
@@ -64,9 +64,9 @@ def build_local_fallback(messages: list[Message]) -> str:
         )
 
     if tokens.intersection({"hi", "hello", "hey"}):
-        return "Hey. Zero here — the Chief's digital co-pilot. Systems are a little busy, but I'm still online."
+        return "Hey. Zero here — the Chief's digital co-pilot. The upstream brain is sulking, but I still have the receipts."
 
     return (
-        "The hosted AI providers are temporarily rate-limited, but I can still cover the "
-        "Chief's projects, experience, skills, resume, and contact details. Try one of those topics."
+        "My upstream brain is temporarily rate-limited. Tragic, I know. I can still pull the "
+        "Chief's projects, experience, skills, resume, and contact details from local memory."
     )
