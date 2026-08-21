@@ -54,3 +54,31 @@ def test_chat_rejects_spoofed_system_role():
         },
     )
     assert response.status_code == 422
+
+
+def test_invalid_session_does_not_consume_rate_limit(monkeypatch):
+    calls = 0
+
+    async def track_rate_limit(_ip: str) -> bool:
+        nonlocal calls
+        calls += 1
+        return False
+
+    monkeypatch.setattr("api.chat.is_rate_limited", track_rate_limit)
+    response = client.post(
+        "/api/chat",
+        headers={"X-Session-Token": "invalid"},
+        json={
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "messages": [{"role": "user", "content": "Hi"}],
+        },
+    )
+    assert response.status_code == 401
+    assert calls == 0
+
+
+def test_provider_health_is_separate_from_readiness():
+    response = client.get("/health/providers")
+    assert response.status_code == 200
+    assert response.json()["local_fallback"] is True
+    assert response.json()["status"] in {"available", "unknown", "degraded"}

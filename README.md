@@ -8,8 +8,8 @@
   <p>
     <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
     <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
-    <img src="https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white" alt="Google Gemini" />
-    <img src="https://img.shields.io/badge/xAI_Grok-000000?style=for-the-badge&logo=x&logoColor=white" alt="xAI Grok" />
+    <img src="https://img.shields.io/badge/Groq-F55036?style=for-the-badge" alt="Groq" />
+    <img src="https://img.shields.io/badge/OpenRouter-6467F2?style=for-the-badge" alt="OpenRouter" />
     <img src="https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge" alt="License" />
   </p>
   <br />
@@ -25,9 +25,9 @@ This repository holds the code for my personal AI tools. I built this to keep my
 
 ### `1. zero-backend/`
 This is a FastAPI backend that runs the **Zero** chatbot on my portfolio website. 
-- It uses Gemini by default, with an automatic fallback to xAI (Grok) if Gemini goes down.
+- It uses Groq first, OpenRouter second, and a deterministic portfolio-data fallback if both hosted providers are unavailable.
 - Streams responses in real-time.
-- Has basic rate-limiting to prevent spam.
+- Uses authenticated chat sessions, distributed rate limiting, bounded provider timing, and optional Supabase telemetry.
 
 ### `2. ZERO_Core/`
 A local terminal UI (TUI) I use for testing models and scripts without needing a web browser.
@@ -49,7 +49,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install the required packages
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # Start the API server
 uvicorn main:app --host 0.0.0.0 --port 8000
@@ -62,8 +62,11 @@ The API will be live at `http://localhost:8000/api/chat`.
 ## Environment Variables
 To run the backend, create a `.env` file in the `zero-backend/` folder with your API keys:
 ```env
-GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_key
-GROQ_API_KEY=your_grok_key
+GROQ_API_KEY=your_groq_key
+OPENROUTER_API_KEY=your_openrouter_key
+CHAT_SESSION_SECRET=a_random_secret_with_at_least_32_characters
+UPSTASH_REDIS_REST_URL=your_upstash_url
+UPSTASH_REDIS_REST_TOKEN=your_upstash_token
 ```
 
 ---

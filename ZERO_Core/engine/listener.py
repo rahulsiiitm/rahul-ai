@@ -13,7 +13,7 @@ from openwakeword.model import Model as OWWModel
 from config import (
     SAMPLE_RATE, CHUNK_SIZE, WHISPER_MODEL_SIZE,
     WAKE_WORD_MODEL, WAKE_WORD_THRESHOLD,
-    SILENCE_THRESHOLD, MAX_SILENCE_SECS, MIN_SPEECH_SECS,
+    SILENCE_THRESHOLD, MAX_SILENCE_SECS, MIN_SPEECH_SECS, MAX_RECORDING_SECS,
 )
 
 
@@ -104,6 +104,7 @@ class ZeroListener:
         silence_count = 0
         max_silence   = int(MAX_SILENCE_SECS * SAMPLE_RATE / CHUNK_SIZE)
         min_speech    = int(MIN_SPEECH_SECS  * SAMPLE_RATE / CHUNK_SIZE)
+        max_frames    = int(MAX_RECORDING_SECS * SAMPLE_RATE / CHUNK_SIZE)
 
         while True:
             chunk, _ = stream.read(CHUNK_SIZE)
@@ -114,6 +115,9 @@ class ZeroListener:
             silence_count = silence_count + 1 if rms < SILENCE_THRESHOLD else 0
 
             if silence_count >= max_silence and len(frames) >= min_speech:
+                break
+            if len(frames) >= max_frames:
+                self._log(f"Recording capped at {MAX_RECORDING_SECS:.0f} seconds.")
                 break
 
         if len(frames) < min_speech:

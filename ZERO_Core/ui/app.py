@@ -224,6 +224,17 @@ class ZeroApp(App):
             self.call_from_thread(chat.write_user, text)
             self.call_from_thread(self.set_status, "● Thinking…")
 
+            if text.strip().lower() == "/confirm-send":
+                response = self.dispatcher.confirm_pending_email()
+                self.call_from_thread(chat.write_zero, response)
+                self.call_from_thread(self.set_status, "● Ready")
+                return
+            if text.strip().lower() == "/cancel-send":
+                response = self.dispatcher.cancel_pending_email()
+                self.call_from_thread(chat.write_zero, response)
+                self.call_from_thread(self.set_status, "● Ready")
+                return
+
             # Collect all tokens into a single string
             response = ""
             for token in self.brain.generate_streaming_response(text):

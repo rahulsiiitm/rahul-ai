@@ -39,10 +39,10 @@ async def _openai_compatible_generator(
             Any,
             await client.chat.completions.create(
                 model=model,
-                messages=formatted_messages,  # type: ignore[arg-type]
+                messages=formatted_messages,
                 stream=True,
                 max_tokens=2048,
-                tools=OPENAI_TOOLS,  # type: ignore[arg-type]
+                tools=OPENAI_TOOLS,
             ),
         )
         tool_calls_accumulator: Dict[int, Dict[str, Any]] = {}

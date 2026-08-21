@@ -56,7 +56,7 @@ Available tools:
   [TOOL:gmail_inbox]                         — fetch latest 10 emails
   [TOOL:gmail_read:<email_id>]               — read a specific email by ID
   [TOOL:gmail_search:<query>]                — search emails (Gmail query syntax)
-  [TOOL:gmail_send:<to>|<subject>|<body>]    — send an email
+  [TOOL:gmail_send:<to>|<subject>|<body>]    — stage an email; Rahul must type /confirm-send before transmission
 
   [TOOL:job_add:<company>|<role>|<link>]     — log a new job application
   [TOOL:job_list]                            — list all job applications

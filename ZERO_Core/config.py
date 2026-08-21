@@ -28,6 +28,7 @@ CHUNK_SIZE         = 1280          # 80 ms at 16 kHz — required by openWakeWor
 SILENCE_THRESHOLD  = 500           # RMS energy below this = silence
 MAX_SILENCE_SECS   = 1.8           # Stop recording after N seconds of silence
 MIN_SPEECH_SECS    = 0.4           # Ignore utterances shorter than this
+MAX_RECORDING_SECS = 30.0          # Hard stop when a noisy room never becomes silent
 
 # ── Database ───────────────────────────────────────────────────────────────────
 DB_PATH = os.path.join(BASE_DIR, "db", "zero.db")

@@ -31,6 +31,13 @@ def boot_terminal_fallback(brain: ZeroBrain):
             if not user_input.strip():
                 continue
 
+            if user_input.strip().lower() == "/confirm-send":
+                print(f"ZERO: {brain.dispatcher.confirm_pending_email()}")
+                continue
+            if user_input.strip().lower() == "/cancel-send":
+                print(f"ZERO: {brain.dispatcher.cancel_pending_email()}")
+                continue
+
             print("ZERO  ──▶ ", end="")
             sys.stdout.flush()
 
