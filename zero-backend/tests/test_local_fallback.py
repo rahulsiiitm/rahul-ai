@@ -22,3 +22,12 @@ def test_unknown_fallback_never_claims_total_outage():
     response = response_for("Tell me something unusual")
     assert "upstream providers are unavailable" not in response.lower()
     assert "projects" in response.lower()
+
+
+def test_substrings_do_not_trigger_greetings():
+    response = response_for("Something technical")
+    assert not response.startswith("Hey.")
+
+
+def test_informal_identity_question_is_supported():
+    assert "I'm Zero" in response_for("what are u btw?")

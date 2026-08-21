@@ -166,8 +166,8 @@ def get_contact_links() -> str:
     """Returns the Chief's contact links (Email, LinkedIn, Twitter). Use this when visitors ask how to reach out."""
     return (
         "You can reach the Chief at:\n"
-        "- Email: rahulsiiitm@gmail.com\n"
-        "- LinkedIn: https://linkedin.com/in/rahulsharma2k4\n"
+        "- Email: rahulsharma.hps@gmail.com\n"
+        "- LinkedIn: https://linkedin.com/in/rahulsiiitm\n"
         "- Twitter: https://twitter.com/rahulsiiitm\n"
         "- GitHub: https://github.com/rahulsiiitm"
     )

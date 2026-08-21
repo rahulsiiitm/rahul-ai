@@ -1,3 +1,5 @@
+import re
+
 from models.schemas import Message
 from services.knowledge import experience_data, projects_data
 
@@ -20,8 +22,11 @@ def _latest_user_text(messages: list[Message]) -> str:
 def build_local_fallback(messages: list[Message]) -> str:
     """Return a useful, factual response when every hosted model is unavailable."""
     text = _latest_user_text(messages)
+    normalized = re.sub(r"[^a-z0-9]+", " ", text).strip()
+    tokens = set(normalized.split())
 
-    if any(phrase in text for phrase in ("who are you", "what are you", "your name")):
+    identity_phrases = ("who are you", "who are u", "what are you", "what are u", "your name")
+    if any(phrase in normalized for phrase in identity_phrases):
         return (
             "I'm Zero — the Chief's AI co-pilot inside this portfolio. "
             "I know his projects, experience, and technical stack. The external brain is "
@@ -58,7 +63,7 @@ def build_local_fallback(messages: list[Message]) -> str:
             "PyTorch, TensorFlow, Docker, Firebase, and vector-search/RAG systems."
         )
 
-    if any(word in text for word in ("hi", "hello", "hey")):
+    if tokens.intersection({"hi", "hello", "hey"}):
         return "Hey. Zero here — the Chief's digital co-pilot. Systems are a little busy, but I'm still online."
 
     return (

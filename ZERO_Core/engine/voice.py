@@ -51,7 +51,7 @@ class ZeroVoice:
 
         clean = text.replace("'", "").replace('"', '')
         try:
-            self.process.stdin.write(clean + "\n")
+            self.process.stdin.write((clean + "\n").encode("utf-8"))
             self.process.stdin.flush()
         except Exception as e:
             print(f"\n[ZERO Voice Flush Error]: {e}")
@@ -86,14 +86,19 @@ class ZeroVoice:
             print(f"\n[ZERO Voice Error]: Audio weights file missing at {self.model}")
             return
 
-        command = f"{self.piper_binary} --model {self.model} --output-raw | aplay -r 22050 -f S16_LE -t raw -"
-        
         self.process = subprocess.Popen(
-            command,
-            shell=True,
+            [self.piper_binary, "--model", self.model, "--output-raw"],
             stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=0,
+        )
+        if self.process.stdout is None:
+            raise RuntimeError("Piper did not expose an audio stream.")
+        self.audio_process = subprocess.Popen(
+            ["aplay", "-r", "22050", "-f", "S16_LE", "-t", "raw", "-"],
+            stdin=self.process.stdout,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            text=True,
-            bufsize=1
         )
+        self.process.stdout.close()

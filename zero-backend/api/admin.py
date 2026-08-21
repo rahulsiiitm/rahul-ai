@@ -13,7 +13,7 @@ from services.chat_admin import (
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin_key)])
 
 
-@router.delete("/chats/{session_id}")
+@router.delete("/chats/{session_id}")  # type: ignore[untyped-decorator]
 async def delete_one_chat(session_id: str) -> dict[str, int | str]:
     try:
         normalized = str(UUID(session_id))
@@ -27,7 +27,7 @@ async def delete_one_chat(session_id: str) -> dict[str, int | str]:
         raise HTTPException(status_code=502, detail="Chat deletion failed.") from exc
 
 
-@router.delete("/chats")
+@router.delete("/chats")  # type: ignore[untyped-decorator]
 async def delete_chats(body: AdminChatDeleteRequest) -> dict[str, int | str]:
     try:
         if body.delete_all:

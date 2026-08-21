@@ -7,6 +7,14 @@ from typing import Any, Coroutine, Dict, Optional, Set
 import httpx
 
 _background_tasks: Set[asyncio.Task[Any]] = set()
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+def _client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(timeout=5.0)
+    return _http_client
 
 
 def _config() -> Optional[tuple[str, str]]:
@@ -48,14 +56,13 @@ async def _post(table: str, payload: Dict[str, Any]) -> None:
 
     base_url, service_key = config
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"{base_url}/rest/v1/{table}",
-                headers=_headers(service_key),
-                json=payload,
-            )
-            if response.status_code >= 400:
-                print(f"[TELEMETRY] {table} write failed: {response.status_code} {response.text[:200]}")
+        response = await _client().post(
+            f"{base_url}/rest/v1/{table}",
+            headers=_headers(service_key),
+            json=payload,
+        )
+        if response.status_code >= 400:
+            print(f"[TELEMETRY] {table} write failed: {response.status_code} {response.text[:200]}")
     except Exception as exc:
         print(f"[TELEMETRY] {table} write failed: {exc}")
 
@@ -67,14 +74,13 @@ async def _rpc(function_name: str, payload: Dict[str, Any]) -> None:
 
     base_url, service_key = config
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"{base_url}/rest/v1/rpc/{function_name}",
-                headers=_headers(service_key),
-                json=payload,
-            )
-            if response.status_code >= 400:
-                print(f"[TELEMETRY] RPC {function_name} failed: {response.status_code} {response.text[:200]}")
+        response = await _client().post(
+            f"{base_url}/rest/v1/rpc/{function_name}",
+            headers=_headers(service_key),
+            json=payload,
+        )
+        if response.status_code >= 400:
+            print(f"[TELEMETRY] RPC {function_name} failed: {response.status_code} {response.text[:200]}")
     except Exception as exc:
         print(f"[TELEMETRY] RPC {function_name} failed: {exc}")
 
@@ -95,8 +101,12 @@ def schedule(coro: Coroutine[Any, Any, Any]) -> None:
 
 
 async def drain_telemetry() -> None:
+    global _http_client
     if _background_tasks:
         await asyncio.gather(*tuple(_background_tasks), return_exceptions=True)
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+    _http_client = None
 
 
 async def touch_session(

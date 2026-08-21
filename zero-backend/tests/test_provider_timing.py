@@ -59,3 +59,19 @@ async def test_selected_provider_stream_cuts_off_idle_stall(monkeypatch):
     assert response is not None
     chunks = [chunk async for chunk in response.body_iterator]
     assert "".join(chunks) == "first\n\nZero's upstream connection stalled. Try that again."
+
+
+@pytest.mark.asyncio
+async def test_selected_provider_caps_persisted_response(monkeypatch):
+    async def oversized_generator(_messages, _session_id):
+        yield "a" * 20
+        yield "b" * 20
+
+    monkeypatch.setattr(chat, "schedule", _discard_scheduled)
+    monkeypatch.setattr(chat, "MAX_ASSISTANT_MESSAGE_CHARS", 25)
+    response = await chat._create_provider_stream(
+        "LargeProvider", "large-model", oversized_generator, _messages(), 0.1, None,
+    )
+    assert response is not None
+    chunks = [chunk async for chunk in response.body_iterator]
+    assert "".join(chunks) == "a" * 20 + "b" * 5

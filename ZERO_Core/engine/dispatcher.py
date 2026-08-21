@@ -19,6 +19,18 @@ class ZeroDispatcher:
         self.gmail  = GmailTool()
         self.jobs   = JobTracker()
         self.system = SystemTool()
+        self._pending_email: tuple[str, str, str] | None = None
+
+    def confirm_pending_email(self) -> str:
+        if self._pending_email is None:
+            return "[Gmail] No email is waiting for confirmation."
+        to, subject, body = self._pending_email
+        self._pending_email = None
+        return self.gmail.send_email(to, subject, body)
+
+    def cancel_pending_email(self) -> str:
+        self._pending_email = None
+        return "[Gmail] Pending email cancelled."
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -55,7 +67,16 @@ class ZeroDispatcher:
 
         if name == "gmail_send":
             to, subject, body = (args.split("|") + ["", "", ""])[:3]
-            return self.gmail.send_email(to.strip(), subject.strip(), body.strip())
+            to, subject, body = to.strip(), subject.strip(), body.strip()
+            if not to or not subject or not body:
+                return "[Gmail] Recipient, subject, and body are required."
+            if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", to) or len(to) > 254:
+                return "[Gmail] The recipient address is invalid."
+            self._pending_email = (to, subject, body)
+            return (
+                f"[Gmail] Draft staged for {to} with subject '{subject}'. "
+                "Rahul must type /confirm-send to transmit it or /cancel-send to discard it."
+            )
 
         if name == "gmail_search":
             return self.gmail.search_emails(args)

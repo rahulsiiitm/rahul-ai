@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from core.config import (
+    MAX_ASSISTANT_MESSAGE_CHARS,
     PROVIDER_SELECTION_TIMEOUT_SECONDS,
     PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS,
     TRUST_PROXY_HEADERS,
@@ -21,6 +22,7 @@ from core.session_auth import (
 from models.schemas import ChatRequest, Message
 from services.ai import PROVIDER_SPECS, ProviderFactory
 from services.local_fallback import build_local_fallback
+from services.provider_health import record_provider_result
 from services.telemetry import hash_visitor, log_event, log_message, schedule, touch_session
 
 router = APIRouter()
@@ -93,6 +95,7 @@ async def _create_provider_stream(
         generator = factory(messages, session_id)
         first_chunk = await asyncio.wait_for(generator.__anext__(), timeout=timeout_seconds)
     except StopAsyncIteration:
+        record_provider_result(provider_name, available=False, reason="empty_response")
         await _close_generator(generator)
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
         print(f"[{provider_name}] Empty response")
@@ -108,6 +111,7 @@ async def _create_provider_stream(
         )
         return None
     except asyncio.TimeoutError:
+        record_provider_result(provider_name, available=False, reason="first_token_timeout")
         await _close_generator(generator)
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
         print(f"[{provider_name}] First token timed out after {elapsed_ms}ms")
@@ -126,6 +130,7 @@ async def _create_provider_stream(
         )
         return None
     except Exception as exc:
+        record_provider_result(provider_name, available=False, reason=type(exc).__name__)
         await _close_generator(generator)
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
         print(f"[{provider_name}] Failed before streaming: {type(exc).__name__}")
@@ -142,6 +147,7 @@ async def _create_provider_stream(
         return None
 
     first_token_ms = int((time.perf_counter() - started_at) * 1000)
+    record_provider_result(provider_name, available=True)
     schedule(
         log_event(
             "provider_selected",
@@ -152,13 +158,15 @@ async def _create_provider_stream(
             metadata={"metric": "first_token_ms"},
         )
     )
+    initial_chunk = first_chunk
 
     async def stream() -> AsyncGenerator[str, None]:
         full_response = ""
         status = "ok"
-        if first_chunk:
-            full_response += first_chunk
-            yield first_chunk
+        if initial_chunk:
+            safe_initial_chunk = initial_chunk[:MAX_ASSISTANT_MESSAGE_CHARS]
+            full_response = safe_initial_chunk
+            yield safe_initial_chunk
 
         try:
             while True:
@@ -169,8 +177,16 @@ async def _create_provider_stream(
                     )
                 except StopAsyncIteration:
                     break
-                full_response += chunk
-                yield chunk
+                remaining = MAX_ASSISTANT_MESSAGE_CHARS - len(full_response)
+                if remaining <= 0:
+                    status = "truncated"
+                    break
+                safe_chunk = chunk[:remaining]
+                full_response += safe_chunk
+                yield safe_chunk
+                if len(safe_chunk) < len(chunk):
+                    status = "truncated"
+                    break
         except asyncio.TimeoutError:
             status = "interrupted"
             print(f"[{provider_name}] Stream stalled")
@@ -241,7 +257,7 @@ async def _create_provider_stream(
     return StreamingResponse(stream(), media_type="text/plain", headers=STREAM_HEADERS)
 
 
-@router.post("/chat/session")
+@router.post("/chat/session")  # type: ignore[untyped-decorator]
 async def create_chat_session(response: Response) -> dict[str, str | int]:
     try:
         credentials = create_session_credentials()
@@ -255,7 +271,7 @@ async def create_chat_session(response: Response) -> dict[str, str | int]:
     }
 
 
-@router.get("/chat/history/{session_id}")
+@router.get("/chat/history/{session_id}")  # type: ignore[untyped-decorator]
 async def get_history(
     request: Request,
     response: Response,
@@ -267,16 +283,16 @@ async def get_history(
     return {"messages": history}
 
 
-@router.post("/chat")
+@router.post("/chat")  # type: ignore[untyped-decorator]
 async def chat_endpoint(request: Request, body: ChatRequest) -> StreamingResponse:
     session_id = body.session_id
     client_ip = _client_ip(request)
 
+    _require_session_access(request, session_id)
+
     if await is_rate_limited(client_ip):
         schedule(log_event("rate_limited", session_id=session_id))
         raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
-
-    _require_session_access(request, session_id)
 
     messages = body.messages[-10:]
 
