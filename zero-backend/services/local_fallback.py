@@ -35,9 +35,10 @@ def build_local_fallback(messages: list[Message]) -> str:
 
     if any(word in text for word in ("who is rahul", "who is the chief", "about rahul", "about the chief")):
         return (
-            "▸ The Chief is a B.Tech CSE student at IIIT Manipur, graduating in 2027.\n"
-            "▸ He's a full-stack and AI engineer focused on RAG, applied ML, and clean interfaces.\n"
-            "▸ His flagship work includes SUTRA, VidChain, and Vyoma."
+            "The Chief is a B.Tech CSE student at IIIT Manipur, graduating in 2027, "
+            "and a full-stack and AI engineer who likes putting serious ML behind interfaces "
+            "that don't look like research software. SUTRA, VidChain, and Vyoma are a fair "
+            "sample of the damage."
         )
 
     if any(word in text for word in ("project", "built", "work")):

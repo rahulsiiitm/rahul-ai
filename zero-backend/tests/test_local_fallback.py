@@ -16,6 +16,7 @@ def test_chief_fallback_uses_portfolio_facts():
     response = response_for("Who is Rahul?")
     assert "IIIT Manipur" in response
     assert "SUTRA" in response
+    assert "▸" not in response
 
 
 def test_unknown_fallback_never_claims_total_outage():
